@@ -29,7 +29,7 @@ except ImportError as e:
     st.stop()
 
 # Set page configuration as the first Streamlit command
-st.set_page_config(layout="wide", page_icon="🛡️", page_title="Anti Hoax")
+st.set_page_config(layout="wide", page_icon="🛡️", page_title="G03NK5 Anti Hoax")
 
 # Custom CSS for enhanced UI
 st.markdown("""
@@ -75,6 +75,7 @@ h3 {
     border-radius: 10px;
     overflow: hidden;
     margin-top: 10px;
+    margin-bottom: 20px; /* Added to separate from next section */
 }
 .progress-bar {
     height: 30px;
@@ -114,6 +115,10 @@ h3 {
 }
 .reference-link:hover {
     text-decoration: underline;
+}
+.section-separator {
+    border-bottom: 1px solid #e0e0e0;
+    margin: 20px 0;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -293,6 +298,7 @@ try:
 
                 input_column.subheader("Visualisasi Probabilitas")
                 display_progress_bar(confidence, prediction_label)
+                st.markdown('<div class="section-separator"></div>', unsafe_allow_html=True)  # Visual separator
 
                 with st.spinner("Menghasilkan Penjelasan Generatif..."):
                     explanation = query_jatevo_hoax_explanation(text, prediction_label, confidence)
