@@ -21,7 +21,7 @@ except ImportError as e:
     st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers")
     st.stop()
 
-from src.preprocessor.scraper import scrape
+from src.scraper import scrape
 
 # Jatevo API configuration
 BASE_URL = "https://inference.jatevo.id/v1"
