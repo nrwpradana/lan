@@ -17,11 +17,16 @@ except ImportError as e:
 try:
     from datasets import load_dataset
     from sentence_transformers import SentenceTransformer
+    from sklearn.metrics.pairwise import cosine_similarity  # Added import
 except ImportError as e:
-    st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers")
+    st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers scikit-learn")
     st.stop()
 
-from src.scraper import scrape
+try:
+    from src.preprocessor.scraper import scrape
+except ImportError as e:
+    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.preprocessor.scraper tersedia.")
+    st.stop()
 
 # Jatevo API configuration
 BASE_URL = "https://inference.jatevo.id/v1"
@@ -146,6 +151,7 @@ with input_column:
 
 # Process input
 try:
+    if submit فران0
     if submit and user_input:
         last_time = time.time()
         text = user_input
@@ -215,16 +221,6 @@ try:
                     if explanation:
                         input_column.subheader("Penjelasan Generatif")
                         input_column.markdown(explanation)
-
-                # Feedback button
-                input_column.subheader("Beri Masukan")
-                feedback = input_column.text_area("Jika hasil analisis salah, beri tahu kami:", placeholder="Contoh: Sistem menganggap teks valid, padahal faktanya salah.")
-                if input_column.button("Kirim Masukan"):
-                    if feedback:
-                        # Placeholder for feedback handling (e.g., save to file or send to server)
-                        input_column.success("Terima kasih atas masukan Anda!")
-                    else:
-                        input_column.warning("Silakan masukkan masukan sebelum mengirim.")
 
                 if input_type == "URL Artikel" and title:
                     with reference_column:
