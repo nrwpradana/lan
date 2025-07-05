@@ -28,19 +28,8 @@ except ImportError as e:
     st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
     st.stop()
 
-# Jatevo API configuration
-BASE_URL = "https://inference.jatevo.id/v1"
-ENDPOINT = f"{BASE_URL}/chat/completions"
-
-# Label dictionary
-label = {0: "valid", 1: "fake"}
-
-# Load API key from st.secrets
-try:
-    API_KEY = st.secrets["JATEVO_API_KEY"]
-except KeyError:
-    st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml atau pengaturan Streamlit Cloud.")
-    st.stop()
+# Set page configuration as the first Streamlit command
+st.set_page_config(layout="wide", page_icon="🛡️", page_title="Anti Hoax")
 
 # Custom CSS for enhanced UI
 st.markdown("""
@@ -129,7 +118,19 @@ h3 {
 </style>
 """, unsafe_allow_html=True)
 
-st.set_page_config(layout="wide", page_icon="🛡️", page_title="Anti Hoax")
+# Jatevo API configuration
+BASE_URL = "https://inference.jatevo.id/v1"
+ENDPOINT = f"{BASE_URL}/chat/completions"
+
+# Label dictionary
+label = {0: "valid", 1: "fake"}
+
+# Load API key from st.secrets
+try:
+    API_KEY = st.secrets["JATEVO_API_KEY"]
+except KeyError:
+    st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml atau pengaturan Streamlit Cloud.")
+    st.stop()
 
 # Improved UI
 st.title("🛡️ Anti Hoax Indonesia")
