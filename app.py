@@ -132,6 +132,12 @@ def load_model():
         base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
         tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
+        # Check if embeddings exist, otherwise encode titles
+        if "embeddings" not in data.column_names:
+            st.warning("Kolom 'embeddings' tidak ditemukan dalam dataset. Mengencode ulang judul...")
+            titles = data["title"]
+            embeddings = base_model.encode(titles, convert_to_tensor=True)
+            data = data.add_column("embeddings", embeddings.tolist())
         return model, base_model, tokenizer, data
     except Exception as e:
         st.error(f"Gagal memuat model atau dataset: {e}")
@@ -141,7 +147,7 @@ def load_model():
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-# Jatevo API query (no caching to ensure fresh responses)
+# Jatevo API query
 def query_jatevo_hoax_explanation(text, prediction, confidence):
     headers = {
         "Content-Type": "application/json",
@@ -163,7 +169,6 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        #"max_tokens": 500,  # Increased to 500 for more complete output
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -175,7 +180,6 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         json_data = response.json()
         if 'choices' in json_data and len(json_data['choices']) > 0:
             explanation = json_data['choices'][0]['message']['content']
-            # Remove <think> if it appears at the start
             if explanation.startswith("<think>"):
                 explanation = explanation.replace("<think>", "").strip()
             return explanation
@@ -213,7 +217,10 @@ try:
             with st.spinner("Membaca Artikel..."):
                 try:
                     scrape_result = scrape(user_input)
-                    title, text = scrape_result.title, scrape_result.text
+                    title = scrape_result.title if hasattr(scrape_result, 'title') else ""
+                    text = scrape_result.text if hasattr(scrape_result, 'text') else text
+                    if not title:
+                        st.warning("Judul artikel tidak ditemukan dari URL.")
                 except Exception as e:
                     st.error(f"Tidak dapat mengambil data artikel dari URL: {e}")
                     st.stop()
@@ -278,17 +285,23 @@ try:
                     with reference_column:
                         st.subheader("Artikel Referensi Terkait")
                         try:
-                            title_embeddings = base_model.encode(title)
-                            similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
-                            sorted_indices = np.argsort(similarity_score)[::-1].tolist()
-                            for i in sorted_indices[:5]:
-                                st.markdown(
-                                    f"""
-                                    <small>{data["url"][i].split("/")[2]}</small>
-                                    <a href="{data["url"][i]}" class="reference-link">{data["title"][i]}</a>
-                                    """,
-                                    unsafe_allow_html=True,
-                                )
+                            if "embeddings" not in data.column_names:
+                                st.error("Kolom 'embeddings' tidak ditemukan dalam dataset. Tidak dapat menampilkan referensi.")
+                            else:
+                                title_embeddings = base_model.encode(title)
+                                similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
+                                sorted_indices = np.argsort(similarity_score)[::-1].tolist()
+                                if len(sorted_indices) > 0:
+                                    for i in sorted_indices[:5]:
+                                        st.markdown(
+                                            f"""
+                                            <small>{data['url'][i].split('/')[2]}</small>
+                                            <a href="{data['url'][i]}" class="reference-link">{data['title'][i]}</a>
+                                            """,
+                                            unsafe_allow_html=True,
+                                        )
+                                else:
+                                    st.warning("Tidak ada referensi yang relevan ditemukan.")
                         except Exception as e:
                             st.error(f"Gagal memuat artikel referensi: {e}")
     elif submit:
