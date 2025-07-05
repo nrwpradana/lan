@@ -21,7 +21,7 @@ except ImportError as e:
     st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers")
     st.stop()
 
-from src.scraper import scrape
+from src.preprocessor.scraper import scrape
 
 # Jatevo API configuration
 BASE_URL = "https://inference.jatevo.id/v1"
@@ -54,27 +54,26 @@ def load_model():
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
         return model, base_model, tokenizer, data
     except Exception as e:
-        st.error(f"Gagal memuat model atau dataset: e")
+        st.error(f"Gagal memuat model atau dataset: {e}")
         st.stop()
 
 # Sigmoid function
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-# Jatevo API query with caching
-@st.cache_data(show_spinner=False)
-def query_jatevo_hoax_explanation(_text, _prediction, _confidence):
+# Jatevo API query (no caching to ensure fresh responses)
+def query_jatevo_hoax_explanation(text, prediction, confidence):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {API_KEY}"
     }
 
     prompt = f"""
-    Teks berikut dianalisis sebagai {_prediction} dengan tingkat kepercayaan {int(_confidence*100)}%. 
-    Berikan penjelasan singkat dalam Bahasa Indonesia mengapa teks ini mungkin {_prediction}, 
+    Teks berikut dianalisis sebagai {prediction} dengan tingkat kepercayaan {int(confidence*100)}%. 
+    Berikan penjelasan singkat dalam Bahasa Indonesia mengapa teks ini mungkin {prediction}, 
     termasuk konteks budaya atau sosial di Indonesia jika relevan. 
     Jika memungkinkan, verifikasi dengan informasi eksternal (misalnya, tren di media sosial atau sumber berita terpercaya).
-    Teks: "{_text[:300]}"  # Limited for performance
+    Teks: "{text[:500]}"  # Increased to 500 characters for better context
     """
     
     payload = {
@@ -83,7 +82,7 @@ def query_jatevo_hoax_explanation(_text, _prediction, _confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        "max_tokens": 300,
+        "max_tokens": 300,  # Kept low for performance
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
