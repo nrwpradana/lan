@@ -7,17 +7,30 @@ import os
 import requests
 import json
 
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from sklearn.metrics.pairwise import cosine_similarity
-from datasets import load_dataset
-from sentence_transformers import SentenceTransformer
-from src.scraper import scrape
+try:
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+except ImportError as e:
+    st.error(f"Gagal mengimpor transformers: {e}. Pastikan library transformers terinstall dengan versi terbaru.")
+    st.error("Jalankan: pip install --upgrade transformers")
+    st.stop()
+
+try:
+    from datasets import load_dataset
+    from sentence_transformers import SentenceTransformer
+except ImportError as e:
+    st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers")
+    st.stop()
+
+from src.preprocessor.scraper import scrape
 
 # Jatevo API configuration
 BASE_URL = "https://inference.jatevo.id/v1"
 ENDPOINT = f"{BASE_URL}/chat/completions"
 
-# Ensure API key is loaded from st.secrets
+# Label dictionary
+label = {0: "valid", 1: "fake"}
+
+# Load API key from st.secrets
 try:
     API_KEY = st.secrets["JATEVO_API_KEY"]
 except KeyError:
@@ -34,11 +47,15 @@ st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu ho
 # Cache model
 @st.cache_resource(show_spinner=False)
 def load_model():
-    model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
-    base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
-    tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
-    data = load_dataset("Rifky/indonesian-hoax-news", split="train")
-    return model, base_model, tokenizer, data
+    try:
+        model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
+        base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
+        tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
+        data = load_dataset("Rifky/indonesian-hoax-news", split="train")
+        return model, base_model, tokenizer, data
+    except Exception as e:
+        st.error(f"Gagal memuat model atau dataset: e")
+        st.stop()
 
 # Sigmoid function
 def sigmoid(x):
@@ -66,7 +83,7 @@ def query_jatevo_hoax_explanation(_text, _prediction, _confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        "max_tokens": 300,  # Reduced for performance
+        "max_tokens": 300,
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -83,8 +100,8 @@ def query_jatevo_hoax_explanation(_text, _prediction, _confidence):
         return f"Error Jatevo API: {e}"
 
 # Gauge chart for probability visualization
-def display_gauge(probability, label):
-    color = "#ff4d4f" if label == "fake" else "#00cc00"
+def display_gauge(probability, label_text):
+    color = "#ff4d4f" if label_text == "fake" else "#00cc00"
     html = f"""
     <script src="https://cdn.jsdelivr.net/npm/gaugeJS@1.3.7/dist/gauge.min.js"></script>
     <canvas id="gauge"></canvas>
@@ -123,7 +140,6 @@ with input_column:
     else:
         user_input = st.text_area("Teks Artikel", placeholder="Masukkan teks artikel atau ringkasan...", height=150)
     
-    # Option to process only title or first paragraph
     process_option = st.selectbox("Proses teks:", ["Seluruh Artikel", "Hanya Judul", "Paragraf Pertama"])
     submit = st.button("Cek Hoaks")
 
@@ -134,24 +150,22 @@ try:
         text = user_input
         title = ""
 
-        # Handle input type
         if input_type == "URL Artikel":
             with st.spinner("Membaca Artikel..."):
                 try:
                     scrape_result = scrape(user_input)
                     title, text = scrape_result.title, scrape_result.text
-                except:
-                    st.error("Tidak dapat mengambil data artikel dari URL.")
+                except Exception as e:
+                    st.error(f"Tidak dapat mengambil data artikel dari URL: {e}")
                     st.stop()
         
         if text:
             text = re.sub(r"\n", " ", text)
 
-            # Limit text based on process_option
             if process_option == "Hanya Judul" and title:
                 text = title
             elif process_option == "Paragraf Pertama":
-                text = text.split(". ")[0] + "."  # Take first sentence/paragraph
+                text = text.split(". ")[0] + "."
 
             with st.spinner("Menganalisis Hoaks..."):
                 token = text.split()
@@ -179,7 +193,6 @@ try:
                 confidence = result[prediction]
                 prediction_label = label[prediction]
 
-                # Display results
                 input_column.markdown(
                     f"<small>Analisis selesai dalam {int(time.time() - last_time)} detik</small>",
                     unsafe_allow_html=True,
@@ -191,32 +204,32 @@ try:
                     input_column.success(f"Berita ini {prediction_label}.")
                     input_column.markdown(f"**Tingkat Kepercayaan:** {int(confidence*100)}%")
                 
-                # Display gauge chart
                 input_column.subheader("Visualisasi Probabilitas")
                 display_gauge(confidence, prediction_label)
 
-                # Query Jatevo for explanation
                 with st.spinner("Menghasilkan Penjelasan Generatif..."):
                     explanation = query_jatevo_hoax_explanation(text, prediction_label, confidence)
                     if explanation:
                         input_column.subheader("Penjelasan Generatif")
                         input_column.markdown(explanation)
 
-                # Reference articles
                 if input_type == "URL Artikel" and title:
                     with reference_column:
                         st.subheader("Artikel Referensi Terkait")
-                        title_embeddings = base_model.encode(title)
-                        similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
-                        sorted_indices = np.argsort(similarity_score)[::-1].tolist()
-                        for i in sorted_indices[:5]:
-                            st.markdown(
-                                f"""
-                                <small>{data["url"][i].split("/")[2]}</small>
-                                <a href={data["url"][i]}><h5>{data["title"][i]}</h5></a>
-                                """,
-                                unsafe_allow_html=True,
-                            )
+                        try:
+                            title_embeddings = base_model.encode(title)
+                            similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
+                            sorted_indices = np.argsort(similarity_score)[::-1].tolist()
+                            for i in sorted_indices[:5]:
+                                st.markdown(
+                                    f"""
+                                    <small>{data["url"][i].split("/")[2]}</small>
+                                    <a href={data["url"][i]}><h5>{data["title"][i]}</h5></a>
+                                    """,
+                                    unsafe_allow_html=True,
+                                )
+                        except Exception as e:
+                            st.error(f"Gagal memuat artikel referensi: {e}")
     elif submit:
         st.error("Harap masukkan URL atau teks artikel.")
 except Exception as e:
