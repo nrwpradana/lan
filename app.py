@@ -69,11 +69,13 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     }
 
     prompt = f"""
-    Teks berikut dianalisis sebagai {prediction} dengan tingkat kepercayaan {int(confidence*100)}%. 
-    Berikan penjelasan singkat dalam Bahasa Indonesia mengapa teks ini mungkin {prediction}, 
-    termasuk konteks budaya atau sosial di Indonesia jika relevan. 
-    Jika memungkinkan, verifikasi dengan informasi eksternal (misalnya, tren di media sosial atau sumber berita terpercaya).
-    Teks: "{text[:500]}"  # Increased to 500 characters for better context
+    Analisis teks berikut untuk memverifikasi kebenaran faktualnya dalam konteks Indonesia. 
+    Teks dianalisis sebagai {prediction} dengan tingkat kepercayaan {int(confidence*100)}%. 
+    Berikan penjelasan singkat dalam Bahasa Indonesia mengapa teks ini mungkin {prediction} atau salah secara faktual. 
+    Fokus pada verifikasi fakta umum (misalnya, informasi resmi tentang Indonesia seperti geografi, sejarah, atau pemerintahan) 
+    dan konteks budaya/sosial di Indonesia. Jika memungkinkan, gunakan informasi eksternal (misalnya, tren media sosial atau sumber terpercaya). 
+    Jika teks mengandung klaim yang meragukan, soroti potensi kesalahan faktual. 
+    Teks: "{text[:500]}"  # 500 characters for context
     """
     
     payload = {
@@ -82,7 +84,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        "max_tokens": 300,  # Kept low for performance
+        "max_tokens": 300,
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -202,7 +204,9 @@ try:
                 else:  # valid
                     input_column.success(f"Berita ini {prediction_label}.")
                     input_column.markdown(f"**Tingkat Kepercayaan:** {int(confidence*100)}%")
-                
+                    if confidence < 0.7:  # Warn if confidence is low
+                        input_column.warning("Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut dari sumber terpercaya seperti CekFakta.com atau media resmi.")
+
                 input_column.subheader("Visualisasi Probabilitas")
                 display_gauge(confidence, prediction_label)
 
@@ -211,6 +215,16 @@ try:
                     if explanation:
                         input_column.subheader("Penjelasan Generatif")
                         input_column.markdown(explanation)
+
+                # Feedback button
+                input_column.subheader("Beri Masukan")
+                feedback = input_column.text_area("Jika hasil analisis salah, beri tahu kami:", placeholder="Contoh: Sistem menganggap teks valid, padahal faktanya salah.")
+                if input_column.button("Kirim Masukan"):
+                    if feedback:
+                        # Placeholder for feedback handling (e.g., save to file or send to server)
+                        input_column.success("Terima kasih atas masukan Anda!")
+                    else:
+                        input_column.warning("Silakan masukkan masukan sebelum mengirim.")
 
                 if input_type == "URL Artikel" and title:
                     with reference_column:
