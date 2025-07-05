@@ -29,7 +29,7 @@ except ImportError as e:
     st.stop()
 
 # Set page configuration as the first Streamlit command
-st.set_page_config(layout="wide", page_icon="🛡️", page_title="G03NK5 Anti Hoax")
+st.set_page_config(layout="wide", page_icon="🛡️", page_title="Anti Hoax")
 
 # Custom CSS for enhanced UI
 st.markdown("""
@@ -68,24 +68,6 @@ h3 {
 }
 .stButton > button:hover {
     background-color: #1557b0;
-}
-.progress-container {
-    width: 100%;
-    background-color: #e0e0e0;
-    border-radius: 10px;
-    overflow: hidden;
-    margin-top: 10px;
-    margin-bottom: 20px; /* Added to separate from next section */
-}
-.progress-bar {
-    height: 30px;
-    transition: width 1s ease-in-out;
-}
-.progress-text {
-    text-align: center;
-    color: white;
-    font-weight: bold;
-    line-height: 30px;
 }
 .warning-box {
     background-color: #fff3cd;
@@ -182,7 +164,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        "max_tokens": 300,
+        "max_tokens": 500,  # Increased to 500 for more complete output
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -193,23 +175,14 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         response.raise_for_status()
         json_data = response.json()
         if 'choices' in json_data and len(json_data['choices']) > 0:
-            return json_data['choices'][0]['message']['content']
+            explanation = json_data['choices'][0]['message']['content']
+            # Remove <think> if it appears at the start
+            if explanation.startswith("<think>"):
+                explanation = explanation.replace("<think>", "").strip()
+            return explanation
         return "Tidak ada penjelasan dari Jatevo API."
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
-
-# Progress bar for probability visualization
-def display_progress_bar(probability, label_text):
-    color = "#ff4d4f" if label_text == "fake" else "#00cc00"
-    percentage = int(probability * 100)
-    html = f"""
-    <div class="progress-container">
-        <div class="progress-bar" style="width: {percentage}%; background-color: {color};">
-            <div class="progress-text">{percentage}%</div>
-        </div>
-    </div>
-    """
-    st.markdown(html, unsafe_allow_html=True)
 
 # UI Layout
 input_column, reference_column = st.columns([3, 2])
@@ -295,10 +268,6 @@ try:
                             '<div class="warning-box">Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut dari sumber terpercaya seperti CekFakta.com atau media resmi.</div>',
                             unsafe_allow_html=True
                         )
-
-                input_column.subheader("Visualisasi Probabilitas")
-                display_progress_bar(confidence, prediction_label)
-                st.markdown('<div class="section-separator"></div>', unsafe_allow_html=True)  # Visual separator
 
                 with st.spinner("Menghasilkan Penjelasan Generatif..."):
                     explanation = query_jatevo_hoax_explanation(text, prediction_label, confidence)
