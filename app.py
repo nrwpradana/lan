@@ -154,7 +154,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     Berikan penjelasan singkat dalam Bahasa Indonesia mengapa teks ini mungkin {prediction} atau salah secara faktual. 
     Fokus pada verifikasi fakta umum (misalnya, informasi resmi tentang Indonesia seperti geografi, sejarah, atau pemerintahan) 
     dan konteks budaya/sosial di Indonesia. Jika memungkinkan, gunakan informasi eksternal (misalnya, tren media sosial atau sumber terpercaya). 
-    Jika teks mengandung klaim yang meragukan, soroti potensi kesalahan faktual. 
+    Jika teks mengandung klaim yang meragukan, soroti potensi kesalahan faktual. Buatkan secara ringkas dan padat maksimal 100 kata.
     Teks: "{text[:500]}"  # 500 characters for context
     """
     
