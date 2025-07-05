@@ -17,15 +17,15 @@ except ImportError as e:
 try:
     from datasets import load_dataset
     from sentence_transformers import SentenceTransformer
-    from sklearn.metrics.pairwise import cosine_similarity  # Added import
+    from sklearn.metrics.pairwise import cosine_similarity  # Fixed import
 except ImportError as e:
     st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers scikit-learn")
     st.stop()
 
 try:
-    from src.scraper import scrape
+    from src.preprocessor.scraper import scrape
 except ImportError as e:
-    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
+    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.preprocessor.scraper tersedia.")
     st.stop()
 
 # Jatevo API configuration
@@ -151,7 +151,6 @@ with input_column:
 
 # Process input
 try:
-    if submit فران0
     if submit and user_input:
         last_time = time.time()
         text = user_input
