@@ -4,3 +4,4 @@ transformers
 datasets 
 sentence-transformers
 datasets
+newspaper
