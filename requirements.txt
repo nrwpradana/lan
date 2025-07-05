@@ -4,4 +4,4 @@ transformers
 datasets 
 sentence-transformers
 datasets
-newspaper
+newspaper3k
