@@ -23,9 +23,9 @@ except ImportError as e:
     st.stop()
 
 try:
-    from src.preprocessor.scraper import scrape
+    from src.scraper import scrape
 except ImportError as e:
-    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.preprocessor.scraper tersedia.")
+    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
     st.stop()
 
 # Jatevo API configuration
