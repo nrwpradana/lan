@@ -17,7 +17,7 @@ except ImportError as e:
 try:
     from datasets import load_dataset
     from sentence_transformers import SentenceTransformer
-    from sklearn.metrics.pairwise import cosine_similarity  # Fixed import
+    from sklearn.metrics.pairwise import cosine_similarity
 except ImportError as e:
     st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers scikit-learn")
     st.stop()
@@ -41,6 +41,93 @@ try:
 except KeyError:
     st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml atau pengaturan Streamlit Cloud.")
     st.stop()
+
+# Custom CSS for enhanced UI
+st.markdown("""
+<style>
+body {
+    font-family: 'Arial', sans-serif;
+    background-color: #f0f2f6;
+}
+.stApp {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 20px;
+}
+h1 {
+    color: #1a73e8;
+    text-align: center;
+    font-size: 2.5em;
+    margin-bottom: 10px;
+}
+h3 {
+    color: #333;
+    font-size: 1.5em;
+    margin-top: 20px;
+}
+.stRadio > label, .stSelectbox > label, .stTextInput > label, .stTextArea > label {
+    color: #444;
+    font-weight: bold;
+}
+.stButton > button {
+    background-color: #1a73e8;
+    color: white;
+    border-radius: 8px;
+    padding: 10px 20px;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+.stButton > button:hover {
+    background-color: #1557b0;
+}
+.progress-container {
+    width: 100%;
+    background-color: #e0e0e0;
+    border-radius: 10px;
+    overflow: hidden;
+    margin-top: 10px;
+}
+.progress-bar {
+    height: 30px;
+    transition: width 1s ease-in-out;
+}
+.progress-text {
+    text-align: center;
+    color: white;
+    font-weight: bold;
+    line-height: 30px;
+}
+.warning-box {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+.error-box {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+.success-box {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+.reference-link {
+    color: #1a73e8;
+    text-decoration: none;
+    font-size: 1.1em;
+}
+.reference-link:hover {
+    text-decoration: underline;
+}
+</style>
+""", unsafe_allow_html=True)
 
 st.set_page_config(layout="wide", page_icon="🛡️", page_title="Anti Hoax")
 
@@ -105,30 +192,18 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
 
-# Gauge chart for probability visualization
-def display_gauge(probability, label_text):
+# Progress bar for probability visualization
+def display_progress_bar(probability, label_text):
     color = "#ff4d4f" if label_text == "fake" else "#00cc00"
+    percentage = int(probability * 100)
     html = f"""
-    <script src="https://cdn.jsdelivr.net/npm/gaugeJS@1.3.7/dist/gauge.min.js"></script>
-    <canvas id="gauge"></canvas>
-    <script>
-    var opts = {{
-        angle: 0, lineWidth: 0.44, radiusScale: 1,
-        pointer: {{ length: 0.6, strokeWidth: 0.035, color: '#000000' }},
-        limitMax: true, limitMin: true, strokeColor: '#E0E0E0',
-        generateGradient: true, highDpiSupport: true,
-        staticZones: [
-            {{strokeStyle: "#ff4d4f", min: 0, max: 50}},
-            {{strokeStyle: "#00cc00", min: 50, max: 100}}
-        ],
-    }};
-    var target = document.getElementById('gauge');
-    var gauge = new Gauge(target).setOptions(opts);
-    gauge.maxValue = 100; gauge.setMinValue(0);
-    gauge.set({int(probability*100)});
-    </script>
+    <div class="progress-container">
+        <div class="progress-bar" style="width: {percentage}%; background-color: {color};">
+            <div class="progress-text">{percentage}%</div>
+        </div>
+    </div>
     """
-    st.components.v1.html(html, height=200)
+    st.markdown(html, unsafe_allow_html=True)
 
 # UI Layout
 input_column, reference_column = st.columns([3, 2])
@@ -204,16 +279,19 @@ try:
                     unsafe_allow_html=True,
                 )
                 if prediction:  # fake
-                    input_column.error(f"Berita ini {prediction_label}.")
-                    input_column.markdown(f"**Tingkat Kepercayaan:** {int(confidence*100)}%")
+                    input_column.markdown(f'<div class="error-box">Berita ini {prediction_label}.</div>', unsafe_allow_html=True)
+                    input_column.markdown(f'<b>Tingkat Kepercayaan:</b> {int(confidence*100)}%', unsafe_allow_html=True)
                 else:  # valid
-                    input_column.success(f"Berita ini {prediction_label}.")
-                    input_column.markdown(f"**Tingkat Kepercayaan:** {int(confidence*100)}%")
+                    input_column.markdown(f'<div class="success-box">Berita ini {prediction_label}.</div>', unsafe_allow_html=True)
+                    input_column.markdown(f'<b>Tingkat Kepercayaan:</b> {int(confidence*100)}%', unsafe_allow_html=True)
                     if confidence < 0.7:  # Warn if confidence is low
-                        input_column.warning("Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut dari sumber terpercaya seperti CekFakta.com atau media resmi.")
+                        input_column.markdown(
+                            '<div class="warning-box">Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut dari sumber terpercaya seperti CekFakta.com atau media resmi.</div>',
+                            unsafe_allow_html=True
+                        )
 
                 input_column.subheader("Visualisasi Probabilitas")
-                display_gauge(confidence, prediction_label)
+                display_progress_bar(confidence, prediction_label)
 
                 with st.spinner("Menghasilkan Penjelasan Generatif..."):
                     explanation = query_jatevo_hoax_explanation(text, prediction_label, confidence)
@@ -232,7 +310,7 @@ try:
                                 st.markdown(
                                     f"""
                                     <small>{data["url"][i].split("/")[2]}</small>
-                                    <a href={data["url"][i]}><h5>{data["title"][i]}</h5></a>
+                                    <a href="{data["url"][i]}" class="reference-link">{data["title"][i]}</a>
                                     """,
                                     unsafe_allow_html=True,
                                 )
