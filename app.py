@@ -164,7 +164,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        "max_tokens": 500,  # Increased to 500 for more complete output
+        #"max_tokens": 500,  # Increased to 500 for more complete output
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
