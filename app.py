@@ -11,7 +11,7 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 from sklearn.metrics.pairwise import cosine_similarity
 from datasets import load_dataset
 from sentence_transformers import SentenceTransformer
-from src.preprocessor.scraper import scrape
+from src.scraper import scrape
 
 # Jatevo API configuration
 BASE_URL = "https://inference.jatevo.id/v1"
