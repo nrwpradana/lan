@@ -102,6 +102,13 @@ h3 {
     border-bottom: 1px solid #e0e0e0;
     margin: 20px 0;
 }
+.inconsistency-box {
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -119,11 +126,6 @@ except KeyError:
     st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml atau pengaturan Streamlit Cloud.")
     st.stop()
 
-# Improved UI
-st.title("🛡️ Anti Hoax Indonesia")
-st.markdown("**Aplikasi deteksi hoaks berbasis AI untuk berita dalam Bahasa Indonesia.**")
-st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu hoaks atau valid.")
-
 # Cache model
 @st.cache_resource(show_spinner=False)
 def load_model():
@@ -132,6 +134,11 @@ def load_model():
         base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
         tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
+        # Pre-compute embeddings for RAG
+        if "embeddings" not in data.column_names:
+            titles = data["title"]
+            embeddings = base_model.encode(titles, convert_to_tensor=True).cpu().numpy()
+            data = data.add_column("embeddings", embeddings.tolist())
         return model, base_model, tokenizer, data
     except Exception as e:
         st.error(f"Gagal memuat model atau dataset: {e}")
@@ -141,29 +148,36 @@ def load_model():
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-# Jatevo API query (no caching to ensure fresh responses)
-def query_jatevo_hoax_explanation(text, prediction, confidence):
+# RAG-enhanced Jatevo query
+def query_jatevo_rag(text, prediction, confidence, base_model, data):
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {API_KEY}"
     }
 
+    # Retrieve relevant context using similarity search
+    text_embedding = base_model.encode(text, convert_to_tensor=True).cpu().numpy()
+    similarity_score = cosine_similarity([text_embedding], data["embeddings"]).flatten()
+    sorted_indices = np.argsort(similarity_score)[::-1].tolist()
+    relevant_context = ""
+    for i in sorted_indices[:3]:  # Top 3 most similar items
+        relevant_context += f"Judul: {data['title'][i]}, Teks: {data['text'][i][:200]}...\n"
+
     prompt = f"""
     Analisis teks berikut untuk memverifikasi kebenaran faktualnya dalam konteks Indonesia. 
     Teks dianalisis sebagai {prediction} dengan tingkat kepercayaan {int(confidence*100)}%. 
-    Berikan penjelasan secara singkat, padat dan jelas dalam Bahasa Indonesia mengapa teks ini mungkin {prediction} atau salah secara faktual. 
-    Jika memungkinkan, gunakan informasi eksternal (misalnya, tren media sosial atau sumber terpercaya). 
-    Jika teks mengandung klaim yang meragukan, soroti potensi kesalahan faktual. 
+    Gunakan konteks berikut untuk mendukung analisis: {relevant_context}
+    Berikan penjelasan singkat, padat, dan jelas DALAM MAKSIMAL 100 KATA Bahasa Indonesia mengapa teks ini mungkin {prediction} atau salah secara faktual. 
+    Hindari kalimat berbelit-belit. Soroti kesalahan faktual jika ada klaim meragukan. 
     Teks: "{text[:600]}"
     """
-    
+
     payload = {
         "model": "deepseek-ai/DeepSeek-R1-0528",
         "messages": [{"role": "user", "content": prompt}],
         "stop": [],
         "stream": False,
-        "top_p": 1,
-        #"max_tokens": 500,  # Increased to 500 for more complete output
+        "max_tokens": 150,  # Batasi panjang respons (sekitar 100-120 kata)
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -175,10 +189,12 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         json_data = response.json()
         if 'choices' in json_data and len(json_data['choices']) > 0:
             explanation = json_data['choices'][0]['message']['content']
-            # Remove <think> if it appears at the start
             if explanation.startswith("<think>"):
                 explanation = explanation.replace("<think>", "").strip()
-            return explanation
+            # Batasi ke 100 kata
+            words = explanation.split()
+            limited_explanation = " ".join(words[:100]) if len(words) > 100 else explanation
+            return limited_explanation
         return "Tidak ada penjelasan dari Jatevo API."
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
@@ -264,15 +280,26 @@ try:
                     input_column.markdown(f'<b>Tingkat Kepercayaan:</b> {int(confidence*100)}%', unsafe_allow_html=True)
                     if confidence < 0.7:  # Warn if confidence is low
                         input_column.markdown(
-                            '<div class="warning-box">Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut dari sumber terpercaya seperti CekFakta.com atau media resmi.</div>',
+                            '<div class="warning-box">Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut.</div>',
                             unsafe_allow_html=True
                         )
 
-                with st.spinner("Menghasilkan Penjelasan Generatif..."):
-                    explanation = query_jatevo_hoax_explanation(text, prediction_label, confidence)
+                with st.spinner("Menghasilkan Penjelasan Generatif dengan RAG..."):
+                    explanation = query_jatevo_rag(text, prediction_label, confidence, base_model, data)
                     if explanation:
                         input_column.subheader("Penjelasan Generatif")
                         input_column.markdown(explanation)
+                        # Check for inconsistency
+                        if "fake" in explanation.lower() and prediction_label == "valid":
+                            input_column.markdown(
+                                '<div class="inconsistency-box">Peringatan: Model valid, tapi RAG menunjukkan kemungkinan hoaks. Verifikasi lebih lanjut dianjurkan.</div>',
+                                unsafe_allow_html=True
+                            )
+                        elif "valid" in explanation.lower() and prediction_label == "fake":
+                            input_column.markdown(
+                                '<div class="inconsistency-box">Peringatan: Model hoaks, tapi RAG menunjukkan valid. Verifikasi lebih lanjut dianjurkan.</div>',
+                                unsafe_allow_html=True
+                            )
 
                 if input_type == "URL Artikel" and title:
                     with reference_column:
