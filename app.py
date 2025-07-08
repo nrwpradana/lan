@@ -125,7 +125,7 @@ except KeyError:
 def load_model():
     try:
         model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
-        base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
+        base_model = SentenceTransformer("distiluse-base-multilingual-cased")  # Ganti model di sini
         tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
         
