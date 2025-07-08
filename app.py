@@ -23,7 +23,7 @@ except ImportError as e:
     st.stop()
 
 try:
-    from src.scraper.Scraper import scrape
+    from src.scraper import scrape
 except ImportError as e:
     st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
     st.stop()
