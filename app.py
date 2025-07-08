@@ -23,9 +23,9 @@ except ImportError as e:
     st.stop()
 
 try:
-    from src.scraper import scrape
+    from src.scraper.Scraper import scrape
 except ImportError as e:
-    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.preprocessor.scraper tersedia.")
+    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
     st.stop()
 
 # Set page configuration as the first Streamlit command
