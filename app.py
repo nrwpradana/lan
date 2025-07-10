@@ -6,7 +6,6 @@ import time
 import os
 import requests
 import json
-import joblib  # Untuk menyimpan/load embeddings ke file
 
 try:
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
@@ -20,13 +19,13 @@ try:
     from sentence_transformers import SentenceTransformer
     from sklearn.metrics.pairwise import cosine_similarity
 except ImportError as e:
-    st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers scikit-learn scikit-learn joblib")
+    st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers scikit-learn")
     st.stop()
 
 try:
     from src.scraper import scrape
 except ImportError as e:
-    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
+    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.preprocessor.scraper tersedia.")
     st.stop()
 
 # Set page configuration as the first Streamlit command
@@ -120,28 +119,19 @@ except KeyError:
     st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml atau pengaturan Streamlit Cloud.")
     st.stop()
 
-# Cache model and embeddings
-@st.cache_resource(show_spinner="Memuat Model...")
+# Improved UI
+st.title("🛡️ Anti Hoax Indonesia")
+st.markdown("**Aplikasi deteksi hoaks berbasis AI untuk berita dalam Bahasa Indonesia.**")
+st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu hoaks atau valid.")
+
+# Cache model
+@st.cache_resource(show_spinner=False)
 def load_model():
     try:
         model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
-        base_model = SentenceTransformer("distiluse-base-multilingual-cased")  # Ganti model di sini
+        base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
         tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
-        
-        # Path to save/load embeddings
-        embeddings_path = "embeddings.npy"
-        if os.path.exists(embeddings_path):
-            embeddings = np.load(embeddings_path)
-            st.success("Menggunakan embeddings yang telah disimpan.")
-        else:
-            titles = data["title"]
-            embeddings = base_model.encode(titles, convert_to_tensor=True).cpu().numpy()
-            np.save(embeddings_path, embeddings)  # Simpan embeddings ke file
-            st.success("Embeddings baru telah dihitung dan disimpan.")
-            data = data.add_column("embeddings", embeddings.tolist())
-        
-        data = data.add_column("embeddings", embeddings.tolist())
         return model, base_model, tokenizer, data
     except Exception as e:
         st.error(f"Gagal memuat model atau dataset: {e}")
@@ -172,7 +162,8 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "messages": [{"role": "user", "content": prompt}],
         "stop": [],
         "stream": False,
-        "max_tokens": 150,  # Batasi panjang respons (sekitar 100-120 kata)
+        "top_p": 1,
+        #"max_tokens": 500,  # Increased to 500 for more complete output
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -184,12 +175,10 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         json_data = response.json()
         if 'choices' in json_data and len(json_data['choices']) > 0:
             explanation = json_data['choices'][0]['message']['content']
+            # Remove <think> if it appears at the start
             if explanation.startswith("<think>"):
                 explanation = explanation.replace("<think>", "").strip()
-            # Batasi ke 100 kata
-            words = explanation.split()
-            limited_explanation = " ".join(words[:100]) if len(words) > 100 else explanation
-            return limited_explanation
+            return explanation
         return "Tidak ada penjelasan dari Jatevo API."
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
