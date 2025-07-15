@@ -45,20 +45,18 @@ except KeyError:
     st.stop()
 
 # Jatevo API query
-def query_jatevo_fact_check(title, text):
+def query_jatevo_fact_check(title):
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {API_KEY}"}
     prompt = f"""
-    Analisis judul berikut untuk memverifikasi kebenaran faktualnya dalam konteks Indonesia.
-    Judul: "{title}"
-    Teks (opsional, jika tersedia): "{text[:600]}"
-    Berikan analisis faktual singkat, padat, dan jelas dalam Bahasa Indonesia. 
-    Ekstrak 2-3 poin utama dari judul sebagai sinyal utama, dan verifikasi kebenarannya berdasarkan fakta umum atau sumber terpercaya di Indonesia (misalnya, Kompas, data pemerintah).
-    Format output dalam struktur berikut:
+    Analisis faktual judul berikut dalam konteks Indonesia secara singkat dan formal.
+    Judul: "{title if title != 'Judul Tidak Tersedia' else 'Tidak ada judul yang diberikan'}"
+    Ekstrak 1-2 poin utama dari judul, verifikasi kebenarannya berdasarkan fakta umum atau sumber terpercaya di Indonesia (misalnya, Kompas, data pemerintah), dan sajikan dalam format:
     - **⚠️ Headline:** [Judul]
-    - **💬 Tweet Signals:** [Poin utama 1], [Poin utama 2], [Poin utama 3]
-    - **📰 Fact Check:** [Verifikasi poin 1], [Verifikasi poin 2], [Verifikasi poin 3]
+    - **💬 Tweet Signals:** [Poin utama 1], [Poin utama 2]
+    - **📰 Fact Check:** [Verifikasi poin 1], [Verifikasi poin 2]
     - **🧠 Summary:** [Ringkasan singkat]
-    - **🔗 Sources:** [Sumber 1], [Sumber 2] (jika ada, berdasarkan pengetahuan internal)
+    - **🔗 Sources:** [Sumber 1] (jika ada)
+    Gunakan bahasa formal dan hindari kalimat informal seperti 'Hmm' atau 'jelas kasus misinformasi viral'.
     """
     
     payload = {
@@ -66,7 +64,7 @@ def query_jatevo_fact_check(title, text):
         "messages": [{"role": "user", "content": prompt}],
         "stop": [],
         "stream": False,
-        "max_tokens": 300,
+        "max_tokens": 200,
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -86,7 +84,7 @@ def query_jatevo_fact_check(title, text):
         return f"Error Jatevo API: {e}"
 
 # UI Layout
-input_column, _ = st.columns([3, 2])  # Hilangkan kolom referensi karena tidak ada sumber eksternal
+input_column, _ = st.columns([3, 2])
 
 with input_column:
     st.title("🛡️ Anti Hoax Indonesia")
@@ -105,7 +103,7 @@ try:
     if submit and user_input:
         last_time = time.time()
         text = user_input
-        title = "Judul Tidak Tersedia"
+        title = "Tidak ada judul yang diberikan"  # Default title
 
         if input_type == "URL Artikel":
             with st.spinner("Membaca Artikel..."):
@@ -113,12 +111,12 @@ try:
                     scrape_result = scrape(user_input)
                     title, text = scrape_result.title, scrape_result.text
                 except Exception as e:
-                    st.error(f"Tidak dapat mengambil data artikel dari URL: {e}")
+                    st.error(f"Gagal mengambil data artikel dari URL: {e}")
                     st.stop()
         
         if title:  # Hanya gunakan judul untuk analisis
             with st.spinner("Menganalisis Hoaks..."):
-                analysis = query_jatevo_fact_check(title, text)
+                analysis = query_jatevo_fact_check(title)
                 input_column.markdown(
                     f"<small>Analisis selesai dalam {int(time.time() - last_time)} detik</small>",
                     unsafe_allow_html=True,
