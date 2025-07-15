@@ -119,14 +119,25 @@ except KeyError:
     st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml atau pengaturan Streamlit Cloud.")
     st.stop()
 
+# Improved UI
+st.title("🛡️ Anti Hoax Indonesia")
+st.markdown("**Aplikasi deteksi hoaks berbasis AI untuk berita dalam Bahasa Indonesia.**")
+st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu hoaks atau valid.")
+
 # Cache model
 @st.cache_resource(show_spinner=False)
 def load_model():
     try:
         model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
-        base_model = SentenceTransformer("firqaaa/indo-sentence-bert-base")
+        base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
         tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
+        # Check if embeddings exist, otherwise encode titles
+        if "embeddings" not in data.column_names:
+            st.warning("Kolom 'embeddings' tidak ditemukan dalam dataset. Mengencode ulang judul...")
+            titles = data["title"]
+            embeddings = base_model.encode(titles, convert_to_tensor=True)
+            data = data.add_column("embeddings", embeddings.tolist())
         return model, base_model, tokenizer, data
     except Exception as e:
         st.error(f"Gagal memuat model atau dataset: {e}")
@@ -146,10 +157,10 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     prompt = f"""
     Analisis teks berikut untuk memverifikasi kebenaran faktualnya dalam konteks Indonesia. 
     Teks dianalisis sebagai {prediction} dengan tingkat kepercayaan {int(confidence*100)}%. 
-    Berikan penjelasan secara SINGKAT, PADAT, DAN JELAS dalam Bahasa Indonesia mengapa teks ini mungkin {prediction}. 
-    Jika memungkinkan, gunakan informasi eksternal (misalnya, tren media sosial atau sumber terpercaya) sertakan link/url yang mendukung. 
-    Jika teks mengandung klaim yang meragukan, soroti potensi kesalahan faktual. 
-    Teks: "{text[:500]}"
+    Berikan penjelasan singkat, padat dan jelas tidak berbelit-belit dalam 100 kata Bahasa Indonesia mengapa teks ini mungkin {prediction} atau salah secara faktual. 
+    Jika memungkinkan, gunakan informasi eksternal (misalnya, tren media sosial atau sumber terpercaya). 
+    Jika teks mengandung klaim yang meragukan, soroti potensi kesalahan faktual.
+    Teks: "{text[:500]}"  # 500 characters for context
     """
     
     payload = {
@@ -158,7 +169,6 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        "max_tokens": 500,
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -182,10 +192,6 @@ input_column, reference_column = st.columns([3, 2])
 
 with st.spinner("Memuat Model..."):
     model, base_model, tokenizer, data = load_model()
-
-# Debug dataset columns
-with reference_column:
-    st.write(f"Debug: Dataset columns: {data.column_names}")
 
 # Input options
 with input_column:
@@ -211,9 +217,10 @@ try:
             with st.spinner("Membaca Artikel..."):
                 try:
                     scrape_result = scrape(user_input)
-                    title, text = scrape_result.title, scrape_result.text
-                    with input_column:
-                        st.write(f"Debug: Title scraped: {title}")
+                    title = scrape_result.title if hasattr(scrape_result, 'title') else ""
+                    text = scrape_result.text if hasattr(scrape_result, 'text') else text
+                    if not title:
+                        st.warning("Judul artikel tidak ditemukan dari URL.")
                 except Exception as e:
                     st.error(f"Tidak dapat mengambil data artikel dari URL: {e}")
                     st.stop()
@@ -262,7 +269,7 @@ try:
                 else:  # valid
                     input_column.markdown(f'<div class="success-box">Berita ini {prediction_label}.</div>', unsafe_allow_html=True)
                     input_column.markdown(f'<b>Tingkat Kepercayaan:</b> {int(confidence*100)}%', unsafe_allow_html=True)
-                    if confidence < 0.7:
+                    if confidence < 0.7:  # Warn if confidence is low
                         input_column.markdown(
                             '<div class="warning-box">Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut dari sumber terpercaya seperti CekFakta.com atau media resmi.</div>',
                             unsafe_allow_html=True
@@ -278,22 +285,25 @@ try:
                     with reference_column:
                         st.subheader("Artikel Referensi Terkait")
                         try:
-                            with st.spinner("Menghitung referensi terkait..."):
+                            if "embeddings" not in data.column_names:
+                                st.error("Kolom 'embeddings' tidak ditemukan dalam dataset. Tidak dapat menampilkan referensi.")
+                            else:
                                 title_embeddings = base_model.encode(title)
-                                with st.write(f"Debug: Title embeddings shape: {title_embeddings.shape}"):
-                                    similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
-                                    sorted_indices = np.argsort(similarity_score)[::-1].tolist()
+                                similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
+                                sorted_indices = np.argsort(similarity_score)[::-1].tolist()
+                                if len(sorted_indices) > 0:
                                     for i in sorted_indices[:5]:
                                         st.markdown(
                                             f"""
-                                            <small>{data["url"][i].split("/")[2]}</small>
-                                            <a href="{data["url"][i]}" class="reference-link">{data["title"][i]}</a>
+                                            <small>{data['url'][i].split('/')[2]}</small>
+                                            <a href="{data['url'][i]}" class="reference-link">{data['title'][i]}</a>
                                             """,
                                             unsafe_allow_html=True,
                                         )
+                                else:
+                                    st.warning("Tidak ada referensi yang relevan ditemukan.")
                         except Exception as e:
                             st.error(f"Gagal memuat artikel referensi: {e}")
-                            st.write(f"Error details: {str(e)}")
     elif submit:
         st.error("Harap masukkan URL atau teks artikel.")
 except Exception as e:
