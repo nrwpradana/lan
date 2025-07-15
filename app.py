@@ -67,7 +67,7 @@ def query_jatevo_fact_check(title, text=None):
         "messages": [{"role": "user", "content": prompt}],
         "stop": [],
         "stream": False,
-        "max_tokens": 600,
+        "max_tokens": 500,
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -80,7 +80,7 @@ def query_jatevo_fact_check(title, text=None):
         if 'choices' in json_data and len(json_data['choices']) > 0:
             explanation = json_data['choices'][0]['message']['content'].strip()
             # Pastikan hanya mengambil bagian yang terstruktur
-            return explanation.split("- **")[1:] if "- **" in explanation else explanation
+            return "\n- **".join([""] + [line for line in explanation.split("\n- **") if line.strip()])
         return "Tidak ada analisis dari Jatevo API."
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
@@ -112,12 +112,18 @@ try:
                 try:
                     scrape_result = scrape(user_input)
                     title, text = scrape_result.title, scrape_result.text
+                    # Pastikan text adalah string
+                    if isinstance(text, list):
+                        text = " ".join(text) if text else ""
                 except Exception as e:
                     st.error(f"Gagal mengambil data artikel dari URL: {e}")
                     st.stop()
         else:  # Teks Langsung
+            # Pastikan text adalah string
+            if isinstance(text, list):
+                text = " ".join(text) if text else user_input
             # Gunakan baris pertama sebagai proksi judul jika ada, atau teks utuh jika tidak ada pemisahan
-            lines = text.split("\n")
+            lines = text.split("\n") if isinstance(text, str) else [text]
             title = lines[0].strip() if lines and lines[0].strip() else text[:50]
 
         if title:
@@ -128,8 +134,7 @@ try:
                     unsafe_allow_html=True,
                 )
                 # Tampilkan hanya bagian terstruktur
-                structured_output = "\n- **".join([""] + [line for line in analysis.split("\n- **") if line.strip()])
-                input_column.markdown(structured_output, unsafe_allow_html=True)
+                input_column.markdown(analysis, unsafe_allow_html=True)
     elif submit:
         st.error("Harap masukkan URL atau teks artikel.")
 except Exception as e:
