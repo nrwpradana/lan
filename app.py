@@ -129,7 +129,7 @@ st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu ho
 def load_model():
     try:
         model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
-        base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
+        base_model = SentenceTransformer("firqaaa/indo-sentence-bert-base")
         tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
         # Check if embeddings exist, otherwise encode titles
@@ -220,7 +220,8 @@ try:
                     title = scrape_result.title if hasattr(scrape_result, 'title') else ""
                     text = scrape_result.text if hasattr(scrape_result, 'text') else text
                     if not title:
-                        st.warning("Judul artikel tidak ditemukan dari URL.")
+                        st.warning("Judul artikel tidak ditemukan dari URL. Menggunakan teks awal sebagai fallback.")
+                        title = text[:50] if text else "Tanpa Judul"
                 except Exception as e:
                     st.error(f"Tidak dapat mengambil data artikel dari URL: {e}")
                     st.stop()
@@ -281,29 +282,32 @@ try:
                         input_column.subheader("Penjelasan Generatif")
                         input_column.markdown(explanation)
 
-                if input_type == "URL Artikel" and title:
-                    with reference_column:
-                        st.subheader("Artikel Referensi Terkait")
-                        try:
-                            if "embeddings" not in data.column_names:
-                                st.error("Kolom 'embeddings' tidak ditemukan dalam dataset. Tidak dapat menampilkan referensi.")
+                # Display reference articles even if not from URL, as a fallback
+                with reference_column:
+                    st.subheader("Artikel Referensi Terkait")
+                    try:
+                        if "embeddings" not in data.column_names:
+                            st.error("Kolom 'embeddings' tidak ditemukan dalam dataset. Tidak dapat menampilkan referensi.")
+                        else:
+                            # Use title if available, otherwise use text snippet
+                            query_text = title if title else text[:50]
+                            title_embeddings = base_model.encode([query_text])[0]  # Ensure single embedding
+                            similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
+                            sorted_indices = np.argsort(similarity_score)[::-1].tolist()
+                            if len(sorted_indices) > 0:
+                                for i in sorted_indices[:5]:
+                                    st.markdown(
+                                        f"""
+                                        <small>{data['url'][i].split('/')[2] if 'url' in data.column_names else 'Sumber Tidak Tersedia'}</small>
+                                        <a href="{data['url'][i] if 'url' in data.column_names else '#'}" class="reference-link">{data['title'][i]}</a>
+                                        """,
+                                        unsafe_allow_html=True,
+                                    )
                             else:
-                                title_embeddings = base_model.encode(title)
-                                similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
-                                sorted_indices = np.argsort(similarity_score)[::-1].tolist()
-                                if len(sorted_indices) > 0:
-                                    for i in sorted_indices[:5]:
-                                        st.markdown(
-                                            f"""
-                                            <small>{data['url'][i].split('/')[2]}</small>
-                                            <a href="{data['url'][i]}" class="reference-link">{data['title'][i]}</a>
-                                            """,
-                                            unsafe_allow_html=True,
-                                        )
-                                else:
-                                    st.warning("Tidak ada referensi yang relevan ditemukan.")
-                        except Exception as e:
-                            st.error(f"Gagal memuat artikel referensi: {e}")
+                                st.warning("Tidak ada referensi yang relevan ditemukan.")
+                    except Exception as e:
+                        st.error(f"Gagal memuat artikel referensi: {e}")
+                        st.markdown("Tidak ada referensi tersedia saat ini.")
     elif submit:
         st.error("Harap masukkan URL atau teks artikel.")
 except Exception as e:
