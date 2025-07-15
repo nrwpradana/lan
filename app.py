@@ -151,10 +151,10 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     prompt = f"""
     Analisis teks berikut untuk memverifikasi kebenaran faktualnya dalam konteks Indonesia. 
     Teks dianalisis sebagai {prediction} dengan tingkat kepercayaan {int(confidence*100)}%. 
-    Berikan penjelasan secara singkat, padat dan jelas dalam Bahasa Indonesia mengapa teks ini mungkin {prediction} atau salah secara faktual. 
-    Jika memungkinkan, gunakan informasi eksternal (misalnya, tren media sosial atau sumber terpercaya). 
+    Berikan penjelasan secara SINGKAT, PADAT, DAN JELAS dalam Bahasa Indonesia mengapa teks ini mungkin {prediction}. 
+    Jika memungkinkan, gunakan informasi eksternal (misalnya, tren media sosial atau sumber terpercaya) sertakan link/url yang mendukung. 
     Jika teks mengandung klaim yang meragukan, soroti potensi kesalahan faktual. 
-    Teks: "{text[:600]}"
+    Teks: "{text[:500]}"
     """
     
     payload = {
@@ -163,7 +163,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        #"max_tokens": 500,  # Increased to 500 for more complete output
+        "max_tokens": 500,  # Increased to 500 for more complete output
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
