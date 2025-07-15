@@ -45,18 +45,21 @@ except KeyError:
     st.stop()
 
 # Jatevo API query
-def query_jatevo_fact_check(title):
+def query_jatevo_fact_check(title, text=None):
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {API_KEY}"}
+    effective_title = title if title else "Teks tanpa judul yang jelas"
+    text_portion = f"Teks (jika ada): \"{text[:600]}\"" if text else ""
     prompt = f"""
     Analisis faktual judul berikut dalam konteks Indonesia secara singkat dan formal.
-    Judul: "{title if title != 'Judul Tidak Tersedia' else 'Tidak ada judul yang diberikan'}"
+    Judul: "{effective_title}"
+    {text_portion}
     Ekstrak 1-2 poin utama dari judul, verifikasi kebenarannya berdasarkan fakta umum atau sumber terpercaya di Indonesia (misalnya, Kompas, data pemerintah), dan sajikan dalam format:
     - **⚠️ Headline:** [Judul]
     - **💬 Tweet Signals:** [Poin utama 1], [Poin utama 2]
     - **📰 Fact Check:** [Verifikasi poin 1], [Verifikasi poin 2]
     - **🧠 Summary:** [Ringkasan singkat]
     - **🔗 Sources:** [Sumber 1] (jika ada)
-    Gunakan bahasa formal dan hindari kalimat informal seperti 'Hmm' atau 'jelas kasus misinformasi viral'.
+    Gunakan bahasa formal dan hindari asumsi default seperti 'Judul Tidak Tersedia'.
     """
     
     payload = {
@@ -103,7 +106,7 @@ try:
     if submit and user_input:
         last_time = time.time()
         text = user_input
-        title = "Tidak ada judul yang diberikan"  # Default title
+        title = None
 
         if input_type == "URL Artikel":
             with st.spinner("Membaca Artikel..."):
@@ -113,10 +116,14 @@ try:
                 except Exception as e:
                     st.error(f"Gagal mengambil data artikel dari URL: {e}")
                     st.stop()
-        
-        if title:  # Hanya gunakan judul untuk analisis
+        else:  # Teks Langsung
+            # Gunakan baris pertama sebagai proksi judul jika ada, atau teks utuh
+            lines = text.split("\n")
+            title = lines[0].strip() if lines and lines[0].strip() else text[:50]  # Ambil 50 karakter pertama jika tidak ada baris
+
+        if title:
             with st.spinner("Menganalisis Hoaks..."):
-                analysis = query_jatevo_fact_check(title)
+                analysis = query_jatevo_fact_check(title, text if text != title else None)
                 input_column.markdown(
                     f"<small>Analisis selesai dalam {int(time.time() - last_time)} detik</small>",
                     unsafe_allow_html=True,
