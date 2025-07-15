@@ -4,15 +4,6 @@ import time
 import os
 import requests
 import json
-import numpy as np  # Tetap gunakan untuk kompatibilitas dengan cosine_similarity jika diperlukan nanti
-
-try:
-    from datasets import load_dataset
-    from sentence_transformers import SentenceTransformer
-    from sklearn.metrics.pairwise import cosine_similarity
-except ImportError as e:
-    st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers scikit-learn")
-    st.stop()
 
 try:
     from src.scraper import scrape
@@ -53,30 +44,6 @@ except KeyError:
     st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml.")
     st.stop()
 
-# Cache embeddings (hanya untuk referensi, tidak untuk ML)
-@st.cache_resource(show_spinner="Memuat Model...")
-def load_reference_data():
-    try:
-        data = load_dataset("Rifky/indonesian-hoax-news", split="train")
-        
-        embeddings_path = "embeddings.npy"
-        if os.path.exists(embeddings_path):
-            embeddings = np.load(embeddings_path)
-            st.success("Menggunakan embeddings yang telah disimpan.")
-        else:
-            base_model = SentenceTransformer("distiluse-base-multilingual-cased")
-            titles = data["title"]
-            embeddings = base_model.encode(titles, convert_to_tensor=True).cpu().numpy()
-            np.save(embeddings_path, embeddings)
-            st.success("Embeddings baru telah dihitung dan disimpan.")
-            data = data.add_column("embeddings", embeddings.tolist())
-        
-        data = data.add_column("embeddings", embeddings.tolist())
-        return data
-    except Exception as e:
-        st.error(f"Gagal memuat data referensi: {e}")
-        st.stop()
-
 # Jatevo API query
 def query_jatevo_fact_check(title, text):
     headers = {"Content-Type": "application/json", "Authorization": f"Bearer {API_KEY}"}
@@ -91,7 +58,7 @@ def query_jatevo_fact_check(title, text):
     - **💬 Tweet Signals:** [Poin utama 1], [Poin utama 2], [Poin utama 3]
     - **📰 Fact Check:** [Verifikasi poin 1], [Verifikasi poin 2], [Verifikasi poin 3]
     - **🧠 Summary:** [Ringkasan singkat]
-    - **🔗 Sources:** [Sumber 1], [Sumber 2] (jika ada)
+    - **🔗 Sources:** [Sumber 1], [Sumber 2] (jika ada, berdasarkan pengetahuan internal)
     """
     
     payload = {
@@ -119,10 +86,7 @@ def query_jatevo_fact_check(title, text):
         return f"Error Jatevo API: {e}"
 
 # UI Layout
-input_column, reference_column = st.columns([3, 2])
-
-with st.spinner("Memuat Data..."):
-    data = load_reference_data()
+input_column, _ = st.columns([3, 2])  # Hilangkan kolom referensi karena tidak ada sumber eksternal
 
 with input_column:
     st.title("🛡️ Anti Hoax Indonesia")
@@ -160,21 +124,6 @@ try:
                     unsafe_allow_html=True,
                 )
                 input_column.markdown(analysis, unsafe_allow_html=True)
-
-                # Tambahkan sumber referensi berdasarkan judul
-                with reference_column:
-                    st.subheader("🔗 Sumber Tambahan")
-                    try:
-                        title_embeddings = SentenceTransformer("distiluse-base-multilingual-cased").encode(title)
-                        similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
-                        sorted_indices = np.argsort(similarity_score)[::-1].tolist()
-                        for i in sorted_indices[:3]:  # Batasi ke 3 sumber
-                            st.markdown(
-                                f'<a href="{data["url"][i]}" class="reference-link">{data["title"][i]}</a>',
-                                unsafe_allow_html=True,
-                            )
-                    except Exception as e:
-                        st.error(f"Gagal memuat sumber tambahan: {e}")
     elif submit:
         st.error("Harap masukkan URL atau teks artikel.")
 except Exception as e:
