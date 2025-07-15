@@ -53,13 +53,13 @@ def query_jatevo_fact_check(title, text=None):
     Berikan analisis faktual singkat dan formal berdasarkan judul berikut dalam konteks Indonesia:
     Judul: "{effective_title}"
     {text_portion}
-    Hanya keluarkan data terstruktur dalam format:
+    Wajib keluarkan data terstruktur dalam format berikut dan hanya format ini:
     - **⚠️ Headline:** [Judul]
     - **💬 Tweet Signals:** [Poin utama 1], [Poin utama 2]
     - **📰 Fact Check:** [Verifikasi poin 1], [Verifikasi poin 2]
     - **🧠 Summary:** [Ringkasan singkat]
     - **🔗 Sources:** [Sumber 1], [Sumber 2] (jika ada)
-    Gunakan bahasa formal, hindari mengulang prompt atau komentar internal seperti 'Hmm' atau 'Saya perlu menyusun'.
+    Gunakan bahasa formal, hindari mengulang prompt, komentar internal seperti 'Hmm' atau 'Saya perlu menyusun', dan pastikan setiap bagian di atas diisi.
     """
     
     payload = {
@@ -67,7 +67,7 @@ def query_jatevo_fact_check(title, text=None):
         "messages": [{"role": "user", "content": prompt}],
         "stop": [],
         "stream": False,
-        "max_tokens": 200,
+        "max_tokens": 250,  # Ditambah untuk memastikan semua bagian terisi
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -79,9 +79,13 @@ def query_jatevo_fact_check(title, text=None):
         json_data = response.json()
         if 'choices' in json_data and len(json_data['choices']) > 0:
             explanation = json_data['choices'][0]['message']['content'].strip()
+            # Debugging: Tampilkan respons mentah untuk analisis
+            st.write("Respons Mentah dari Jatevo:", explanation)  # Untuk debugging
             # Ambil hanya bagian terstruktur yang dimulai dengan "- **"
             structured_lines = [line for line in explanation.split("\n") if line.strip().startswith("- **")]
-            return "\n".join(structured_lines) if structured_lines else "Tidak ada analisis terstruktur dari Jatevo API."
+            if structured_lines:
+                return "\n".join(structured_lines)
+            return "Tidak ada analisis terstruktur dari Jatevo API. Periksa respons mentah di atas."
         return "Tidak ada analisis dari Jatevo API."
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
