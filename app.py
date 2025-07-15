@@ -119,11 +119,6 @@ except KeyError:
     st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml atau pengaturan Streamlit Cloud.")
     st.stop()
 
-# Improved UI
-st.title("🛡️ Anti Hoax Indonesia")
-st.markdown("**Aplikasi deteksi hoaks berbasis AI untuk berita dalam Bahasa Indonesia.**")
-st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu hoaks atau valid.")
-
 # Cache model
 @st.cache_resource(show_spinner=False)
 def load_model():
@@ -141,7 +136,7 @@ def load_model():
 def sigmoid(x):
     return 1 / (1 + np.exp(-x))
 
-# Jatevo API query (no caching to ensure fresh responses)
+# Jatevo API query
 def query_jatevo_hoax_explanation(text, prediction, confidence):
     headers = {
         "Content-Type": "application/json",
@@ -163,7 +158,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "stop": [],
         "stream": False,
         "top_p": 1,
-        "max_tokens": 500,  # Increased to 500 for more complete output
+        "max_tokens": 500,
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -175,7 +170,6 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         json_data = response.json()
         if 'choices' in json_data and len(json_data['choices']) > 0:
             explanation = json_data['choices'][0]['message']['content']
-            # Remove <think> if it appears at the start
             if explanation.startswith("<think>"):
                 explanation = explanation.replace("<think>", "").strip()
             return explanation
@@ -188,6 +182,10 @@ input_column, reference_column = st.columns([3, 2])
 
 with st.spinner("Memuat Model..."):
     model, base_model, tokenizer, data = load_model()
+
+# Debug dataset columns
+with reference_column:
+    st.write(f"Debug: Dataset columns: {data.column_names}")
 
 # Input options
 with input_column:
@@ -214,6 +212,8 @@ try:
                 try:
                     scrape_result = scrape(user_input)
                     title, text = scrape_result.title, scrape_result.text
+                    with input_column:
+                        st.write(f"Debug: Title scraped: {title}")
                 except Exception as e:
                     st.error(f"Tidak dapat mengambil data artikel dari URL: {e}")
                     st.stop()
@@ -262,7 +262,7 @@ try:
                 else:  # valid
                     input_column.markdown(f'<div class="success-box">Berita ini {prediction_label}.</div>', unsafe_allow_html=True)
                     input_column.markdown(f'<b>Tingkat Kepercayaan:</b> {int(confidence*100)}%', unsafe_allow_html=True)
-                    if confidence < 0.7:  # Warn if confidence is low
+                    if confidence < 0.7:
                         input_column.markdown(
                             '<div class="warning-box">Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut dari sumber terpercaya seperti CekFakta.com atau media resmi.</div>',
                             unsafe_allow_html=True
@@ -278,19 +278,22 @@ try:
                     with reference_column:
                         st.subheader("Artikel Referensi Terkait")
                         try:
-                            title_embeddings = base_model.encode(title)
-                            similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
-                            sorted_indices = np.argsort(similarity_score)[::-1].tolist()
-                            for i in sorted_indices[:5]:
-                                st.markdown(
-                                    f"""
-                                    <small>{data["url"][i].split("/")[2]}</small>
-                                    <a href="{data["url"][i]}" class="reference-link">{data["title"][i]}</a>
-                                    """,
-                                    unsafe_allow_html=True,
-                                )
+                            with st.spinner("Menghitung referensi terkait..."):
+                                title_embeddings = base_model.encode(title)
+                                with st.write(f"Debug: Title embeddings shape: {title_embeddings.shape}"):
+                                    similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
+                                    sorted_indices = np.argsort(similarity_score)[::-1].tolist()
+                                    for i in sorted_indices[:5]:
+                                        st.markdown(
+                                            f"""
+                                            <small>{data["url"][i].split("/")[2]}</small>
+                                            <a href="{data["url"][i]}" class="reference-link">{data["title"][i]}</a>
+                                            """,
+                                            unsafe_allow_html=True,
+                                        )
                         except Exception as e:
                             st.error(f"Gagal memuat artikel referensi: {e}")
+                            st.write(f"Error details: {str(e)}")
     elif submit:
         st.error("Harap masukkan URL atau teks artikel.")
 except Exception as e:
