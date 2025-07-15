@@ -50,16 +50,16 @@ def query_jatevo_fact_check(title, text=None):
     effective_title = title if title else "Teks tanpa judul yang jelas"
     text_portion = f"Teks (jika ada): \"{text[:600]}\"" if text else ""
     prompt = f"""
-    Analisis faktual judul berikut dalam konteks Indonesia secara singkat dan formal.
+    Berikan analisis faktual singkat dan formal berdasarkan judul berikut dalam konteks Indonesia:
     Judul: "{effective_title}"
     {text_portion}
-    Ekstrak 1-2 poin utama dari judul, verifikasi kebenarannya berdasarkan fakta umum atau sumber terpercaya di Indonesia (misalnya, Kompas, data pemerintah), dan sajikan dalam format:
+    Hanya keluarkan data terstruktur dalam format:
     - **⚠️ Headline:** [Judul]
     - **💬 Tweet Signals:** [Poin utama 1], [Poin utama 2]
     - **📰 Fact Check:** [Verifikasi poin 1], [Verifikasi poin 2]
     - **🧠 Summary:** [Ringkasan singkat]
-    - **🔗 Sources:** [Sumber 1] (jika ada)
-    Gunakan bahasa formal dan hindari asumsi default seperti 'Judul Tidak Tersedia'.
+    - **🔗 Sources:** [Sumber 1], [Sumber 2] (jika ada)
+    Gunakan bahasa formal, hindari mengulang prompt atau komentar internal.
     """
     
     payload = {
@@ -78,10 +78,9 @@ def query_jatevo_fact_check(title, text=None):
         response.raise_for_status()
         json_data = response.json()
         if 'choices' in json_data and len(json_data['choices']) > 0:
-            explanation = json_data['choices'][0]['message']['content']
-            if explanation.startswith("<think>"):
-                explanation = explanation.replace("<think>", "").strip()
-            return explanation
+            explanation = json_data['choices'][0]['message']['content'].strip()
+            # Pastikan hanya mengambil bagian yang terstruktur
+            return explanation.split("- **")[1:] if "- **" in explanation else explanation
         return "Tidak ada analisis dari Jatevo API."
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
@@ -117,9 +116,9 @@ try:
                     st.error(f"Gagal mengambil data artikel dari URL: {e}")
                     st.stop()
         else:  # Teks Langsung
-            # Gunakan baris pertama sebagai proksi judul jika ada, atau teks utuh
+            # Gunakan baris pertama sebagai proksi judul jika ada, atau teks utuh jika tidak ada pemisahan
             lines = text.split("\n")
-            title = lines[0].strip() if lines and lines[0].strip() else text[:50]  # Ambil 50 karakter pertama jika tidak ada baris
+            title = lines[0].strip() if lines and lines[0].strip() else text[:50]
 
         if title:
             with st.spinner("Menganalisis Hoaks..."):
@@ -128,7 +127,9 @@ try:
                     f"<small>Analisis selesai dalam {int(time.time() - last_time)} detik</small>",
                     unsafe_allow_html=True,
                 )
-                input_column.markdown(analysis, unsafe_allow_html=True)
+                # Tampilkan hanya bagian terstruktur
+                structured_output = "\n- **".join([""] + [line for line in analysis.split("\n- **") if line.strip()])
+                input_column.markdown(structured_output, unsafe_allow_html=True)
     elif submit:
         st.error("Harap masukkan URL atau teks artikel.")
 except Exception as e:
