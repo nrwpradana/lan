@@ -67,7 +67,7 @@ def query_jatevo_fact_check(title, text=None):
         "messages": [{"role": "user", "content": prompt}],
         "stop": [],
         "stream": False,
-        #"max_tokens": 200,
+        "max_tokens": 600,
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
