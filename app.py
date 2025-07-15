@@ -25,7 +25,7 @@ except ImportError as e:
 try:
     from src.scraper import scrape
 except ImportError as e:
-    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.preprocessor.scraper tersedia.")
+    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
     st.stop()
 
 # Set page configuration as the first Streamlit command
@@ -129,7 +129,7 @@ st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu ho
 def load_model():
     try:
         model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
-        base_model = SentenceTransformer("indobenchmark/indobert-base-p1")
+        base_model = SentenceTransformer("firqaaa/indo-sentence-bert-base")
         tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
         return model, base_model, tokenizer, data
