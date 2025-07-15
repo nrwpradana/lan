@@ -59,7 +59,7 @@ def query_jatevo_fact_check(title, text=None):
     - **📰 Fact Check:** [Verifikasi poin 1], [Verifikasi poin 2]
     - **🧠 Summary:** [Ringkasan singkat]
     - **🔗 Sources:** [Sumber 1], [Sumber 2] (jika ada)
-    Gunakan bahasa formal, hindari mengulang prompt atau komentar internal.
+    Gunakan bahasa formal, hindari mengulang prompt atau komentar internal seperti 'Hmm' atau 'Saya perlu menyusun'.
     """
     
     payload = {
@@ -67,7 +67,7 @@ def query_jatevo_fact_check(title, text=None):
         "messages": [{"role": "user", "content": prompt}],
         "stop": [],
         "stream": False,
-        "max_tokens": 500,
+        "max_tokens": 200,
         "temperature": 0.7,
         "presence_penalty": 0,
         "frequency_penalty": 0
@@ -79,8 +79,9 @@ def query_jatevo_fact_check(title, text=None):
         json_data = response.json()
         if 'choices' in json_data and len(json_data['choices']) > 0:
             explanation = json_data['choices'][0]['message']['content'].strip()
-            # Pastikan hanya mengambil bagian yang terstruktur
-            return "\n- **".join([""] + [line for line in explanation.split("\n- **") if line.strip()])
+            # Ambil hanya bagian terstruktur yang dimulai dengan "- **"
+            structured_lines = [line for line in explanation.split("\n") if line.strip().startswith("- **")]
+            return "\n".join(structured_lines) if structured_lines else "Tidak ada analisis terstruktur dari Jatevo API."
         return "Tidak ada analisis dari Jatevo API."
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
