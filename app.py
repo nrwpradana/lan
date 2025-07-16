@@ -5,21 +5,35 @@ import re
 import time
 import requests
 import json
-from transformers import AutoModelForSequenceClassification, AutoTokenizer
-from datasets import load_dataset
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
-from src.scraper import scrape
+try:
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+except ImportError as e:
+    st.error(f"Gagal mengimpor transformers: {e}. Pastikan library transformers terinstall dengan versi terbaru.")
+    st.error("Jalankan: pip install --upgrade transformers torch")
+    st.stop()
+try:
+    from datasets import load_dataset
+    from sentence_transformers import SentenceTransformer
+    from sklearn.metrics.pairwise import cosine_similarity
+except ImportError as e:
+    st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers scikit-learn")
+    st.stop()
+try:
+    from src.scraper import scrape
+except ImportError as e:
+    st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
+    st.stop()
 
 # Set page configuration
 st.set_page_config(layout="wide", page_icon="🛡️", page_title="Anti Hoax Chat")
 
-# Custom CSS for modern, eye-catching UI
+# Custom CSS for Grok-like UI
 st.markdown("""
 <style>
 body {
     font-family: 'Segoe UI', sans-serif;
-    background-color: #f5f7fa;
+    background-color: #1e1e2f;
+    color: #ffffff;
 }
 .stApp {
     max-width: 1000px;
@@ -27,45 +41,52 @@ body {
     padding: 20px;
 }
 h1 {
-    color: #007bff;
+    color: #00d4ff;
     text-align: center;
     font-size: 2.8em;
-    margin-bottom: 10px;
     font-weight: 700;
+    margin-bottom: 10px;
 }
 .chat-container {
-    background-color: #ffffff;
+    background-color: #2a2a3d;
     border-radius: 10px;
     padding: 20px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    max-height: 500px;
+    overflow-y: auto;
 }
 .chat-message {
-    padding: 10px;
-    margin: 10px 0;
+    padding: 12px;
+    margin: 8px 0;
     border-radius: 8px;
+    max-width: 80%;
 }
 .user-message {
-    background-color: #e6f3ff;
-    text-align: right;
+    background-color: #007bff;
+    color: white;
+    margin-left: auto;
 }
 .bot-message {
-    background-color: #f0f0f0;
+    background-color: #3a3a4f;
+    color: #ffffff;
 }
 .stTextInput > div > div > input {
     border-radius: 8px;
-    padding: 10px;
-    border: 1px solid #007bff;
+    padding: 12px;
+    border: 1px solid #00d4ff;
+    background-color: #2a2a3d;
+    color: #ffffff;
 }
 .stButton > button {
-    background-color: #007bff;
-    color: white;
+    background-color: #00d4ff;
+    color: #1e1e2f;
     border-radius: 8px;
     padding: 10px 20px;
     font-size: 16px;
     transition: background-color 0.3s;
 }
 .stButton > button:hover {
-    background-color: #0056b3;
+    background-color: #00aaff;
 }
 .result-box {
     padding: 15px;
@@ -73,30 +94,43 @@ h1 {
     margin-top: 15px;
 }
 .valid-box {
-    background-color: #d4edda;
-    color: #155724;
+    background-color: #2a4b2a;
+    color: #ffffff;
 }
 .fake-box {
-    background-color: #f8d7da;
-    color: #721c24;
+    background-color: #4b2a2a;
+    color: #ffffff;
 }
 .warning-box {
-    background-color: #fff3cd;
-    color: #856404;
+    background-color: #4b4b2a;
+    color: #ffffff;
     padding: 15px;
     border-radius: 8px;
     margin-top: 15px;
 }
 .reference-link {
-    color: #007bff;
+    color: #00d4ff;
     text-decoration: none;
 }
 .reference-link:hover {
     text-decoration: underline;
 }
 .section-separator {
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid #3a3a4f;
     margin: 20px 0;
+}
+.spinner {
+    border: 4px solid #3a3a4f;
+    border-top: 4px solid #00d4ff;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    animation: spin 1s linear infinite;
+    margin: 10px auto;
+}
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -121,7 +155,7 @@ def load_model():
     try:
         model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
         base_model = SentenceTransformer("firqaaa/indo-sentence-bert-base")
-        tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
+        tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", use_fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
         if "embeddings" not in data.column_names:
             st.warning("Kolom 'embeddings' tidak ditemukan. Mengencode ulang judul...")
@@ -175,7 +209,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
 
-# Initialize session state for chat history and submit state
+# Initialize session state
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 if 'submitted' not in st.session_state:
@@ -186,6 +220,12 @@ st.title("🛡️ Anti Hoax Indonesia")
 st.markdown("**Chat dengan AI untuk deteksi hoaks berita dalam Bahasa Indonesia.**")
 st.markdown("Masukkan judul berita atau URL artikel, dan saya akan memeriksa apakah itu hoaks atau valid!")
 
+# Reset chat history button
+if st.button("Hapus Riwayat"):
+    st.session_state.chat_history = []
+    st.session_state.submitted = False
+    st.rerun()
+
 # Chat container
 chat_container = st.container()
 with chat_container:
@@ -195,18 +235,21 @@ with chat_container:
         else:
             st.markdown(f'<div class="chat-message bot-message">{message["content"]}</div>', unsafe_allow_html=True)
 
-# Input and submit
+# Input form
 with st.form(key='chat_form', clear_on_submit=True):
     user_input = st.text_input("Masukkan judul berita atau URL:", placeholder="Contoh: 'Vaksin menyebabkan kemandulan' atau URL artikel")
     submit = st.form_submit_button("Cek Hoaks")
 
-# Process input only if form is submitted and input is not empty
+# Process input
 if submit and user_input and not st.session_state.submitted:
-    st.session_state.submitted = True  # Mark as submitted to prevent re-processing
+    st.session_state.submitted = True
+    st.markdown('<div class="spinner"></div>', unsafe_allow_html=True)
+    
+    # Load model
     with st.spinner("Memuat Model..."):
         model, base_model, tokenizer, data = load_model()
     
-    # Add user message to chat history
+    # Add user message
     st.session_state.chat_history.append({"role": "user", "content": user_input})
     
     with st.spinner("Menganalisis Hoaks..."):
@@ -226,9 +269,9 @@ if submit and user_input and not st.session_state.submitted:
                     "role": "bot",
                     "content": f"Error: Tidak dapat mengambil judul dari URL: {e}"
                 })
-                st.session_state.submitted = False  # Reset submit state
-                st.experimental_rerun()
-                st.stop()  # Stop further execution instead of return
+                st.session_state.submitted = False
+                st.rerun()
+                st.stop()
 
         # Process title
         token = title.split()
@@ -263,7 +306,7 @@ if submit and user_input and not st.session_state.submitted:
         <b>Tingkat Kepercayaan:</b> {int(confidence*100)}%
         </div>
         """
-        if confidence < 0.5:
+        if confidence < 0.7:
             bot_response += """
             <div class="warning-box">
             Keyakinan rendah. Disarankan memeriksa fakta lebih lanjut di CekFakta.com atau media resmi.
@@ -296,11 +339,11 @@ if submit and user_input and not st.session_state.submitted:
         except Exception as e:
             bot_response += f"Gagal memuat artikel referensi: {e}<br>Tidak ada referensi tersedia."
 
-        # Add bot response to chat history
+        # Add bot response
         st.session_state.chat_history.append({"role": "bot", "content": bot_response})
 
-    st.session_state.submitted = False  # Reset submit state after processing
-    st.experimental_rerun()
+    st.session_state.submitted = False
+    st.rerun()
 
 # Handle empty input
 if submit and not user_input:
@@ -308,5 +351,5 @@ if submit and not user_input:
         "role": "bot",
         "content": "Harap masukkan judul berita atau URL artikel."
     })
-    st.session_state.submitted = False  # Reset submit state
-    st.experimental_rerun()
+    st.session_state.submitted = False
+    st.rerun()
