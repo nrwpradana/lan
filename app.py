@@ -3,14 +3,17 @@ import numpy as np
 import pandas as pd
 import re
 import time
+import os
 import requests
 import json
+
 try:
     from transformers import AutoModelForSequenceClassification, AutoTokenizer
 except ImportError as e:
     st.error(f"Gagal mengimpor transformers: {e}. Pastikan library transformers terinstall dengan versi terbaru.")
-    st.error("Jalankan: pip install --upgrade transformers torch")
+    st.error("Jalankan: pip install --upgrade transformers")
     st.stop()
+
 try:
     from datasets import load_dataset
     from sentence_transformers import SentenceTransformer
@@ -18,119 +21,86 @@ try:
 except ImportError as e:
     st.error(f"Gagal mengimpor library: {e}. Install dengan: pip install datasets sentence-transformers scikit-learn")
     st.stop()
+
 try:
     from src.scraper import scrape
 except ImportError as e:
     st.error(f"Gagal mengimpor scraper: {e}. Pastikan modul src.scraper tersedia.")
     st.stop()
 
-# Set page configuration
-st.set_page_config(layout="wide", page_icon="🛡️", page_title="Anti Hoax Chat")
+# Set page configuration as the first Streamlit command
+st.set_page_config(layout="wide", page_icon="🛡️", page_title="Anti Hoax")
 
-# Custom CSS for Grok-like UI
+# Custom CSS for enhanced UI
 st.markdown("""
 <style>
 body {
-    font-family: 'Segoe UI', sans-serif;
-    background-color: #1e1e2f;
-    color: #ffffff;
+    font-family: 'Arial', sans-serif;
+    background-color: #f0f2f6;
 }
 .stApp {
-    max-width: 1000px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 20px;
 }
 h1 {
-    color: #00d4ff;
+    color: #1a73e8;
     text-align: center;
-    font-size: 2.8em;
-    font-weight: 700;
+    font-size: 2.5em;
     margin-bottom: 10px;
 }
-.chat-container {
-    background-color: #2a2a3d;
-    border-radius: 10px;
-    padding: 20px;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-    max-height: 500px;
-    overflow-y: auto;
+h3 {
+    color: #333;
+    font-size: 1.5em;
+    margin-top: 20px;
 }
-.chat-message {
-    padding: 12px;
-    margin: 8px 0;
-    border-radius: 8px;
-    max-width: 80%;
-}
-.user-message {
-    background-color: #007bff;
-    color: white;
-    margin-left: auto;
-}
-.bot-message {
-    background-color: #3a3a4f;
-    color: #ffffff;
-}
-.stTextInput > div > div > input {
-    border-radius: 8px;
-    padding: 12px;
-    border: 1px solid #00d4ff;
-    background-color: #2a2a3d;
-    color: #ffffff;
+.stRadio > label, .stSelectbox > label, .stTextInput > label, .stTextArea > label {
+    color: #444;
+    font-weight: bold;
 }
 .stButton > button {
-    background-color: #00d4ff;
-    color: #1e1e2f;
+    background-color: #1a73e8;
+    color: white;
     border-radius: 8px;
     padding: 10px 20px;
     font-size: 16px;
     transition: background-color 0.3s;
 }
 .stButton > button:hover {
-    background-color: #00aaff;
-}
-.result-box {
-    padding: 15px;
-    border-radius: 8px;
-    margin-top: 15px;
-}
-.valid-box {
-    background-color: #2a4b2a;
-    color: #ffffff;
-}
-.fake-box {
-    background-color: #4b2a2a;
-    color: #ffffff;
+    background-color: #1557b0;
 }
 .warning-box {
-    background-color: #4b4b2a;
-    color: #ffffff;
-    padding: 15px;
-    border-radius: 8px;
-    margin-top: 15px;
+    background-color: #fff3cd;
+    color: #856404;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+.error-box {
+    background-color: #f8d7da;
+    color: #721c24;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
+}
+.success-box {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 10px;
+    border-radius: 5px;
+    margin-top: 10px;
 }
 .reference-link {
-    color: #00d4ff;
+    color: #1a73e8;
     text-decoration: none;
+    font-size: 1.1em;
 }
 .reference-link:hover {
     text-decoration: underline;
 }
 .section-separator {
-    border-bottom: 1px solid #3a3a4f;
+    border-bottom: 1px solid #e0e0e0;
     margin: 20px 0;
-}
-.spinner {
-    border: 4px solid #3a3a4f;
-    border-top: 4px solid #00d4ff;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    animation: spin 1s linear infinite;
-    margin: 10px auto;
-}
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
 }
 </style>
 """, unsafe_allow_html=True)
@@ -146,8 +116,13 @@ label = {0: "valid", 1: "fake"}
 try:
     API_KEY = st.secrets["JATEVO_API_KEY"]
 except KeyError:
-    st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml.")
+    st.error("API Key Jatevo tidak ditemukan di st.secrets. Tambahkan JATEVO_API_KEY di secrets.toml atau pengaturan Streamlit Cloud.")
     st.stop()
+
+# Improved UI
+st.title("🛡️ Anti Hoax Indonesia")
+st.markdown("**Aplikasi deteksi hoaks berbasis AI untuk berita dalam Bahasa Indonesia.**")
+st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu hoaks atau valid.")
 
 # Cache model
 @st.cache_resource(show_spinner=False)
@@ -155,10 +130,11 @@ def load_model():
     try:
         model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
         base_model = SentenceTransformer("firqaaa/indo-sentence-bert-base")
-        tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", use_fast=True)
+        tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
+        # Check if embeddings exist, otherwise encode titles
         if "embeddings" not in data.column_names:
-            st.warning("Kolom 'embeddings' tidak ditemukan. Mengencode ulang judul...")
+            st.warning("Kolom 'embeddings' tidak ditemukan dalam dataset. Mengencode ulang judul...")
             titles = data["title"]
             embeddings = base_model.encode(titles, convert_to_tensor=True)
             data = data.add_column("embeddings", embeddings.tolist())
@@ -177,14 +153,16 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "Content-Type": "application/json",
         "Authorization": f"Bearer {API_KEY}"
     }
+
     prompt = f"""
-    Analisis judul berikut untuk memverifikasi kebenaran faktualnya dalam konteks Indonesia. 
-    Judul dianalisis sebagai {prediction} dengan tingkat kepercayaan {int(confidence*100)}%. 
-    Berikan penjelasan singkat, padat, dan jelas dalam 100 kata Bahasa Indonesia mengapa judul ini mungkin {prediction} atau salah secara faktual. 
-    Gunakan informasi eksternal jika memungkinkan (misalnya, tren media sosial atau sumber terpercaya). 
-    Soroti potensi kesalahan faktual jika ada.
-    Judul: "{text}"
+    Analisis teks berikut untuk memverifikasi kebenaran faktualnya dalam konteks Indonesia. 
+    Teks dianalisis sebagai {prediction} dengan tingkat kepercayaan {int(confidence*100)}%. 
+    Berikan penjelasan singkat, padat dan jelas tidak berbelit-belit dalam 100 kata Bahasa Indonesia mengapa teks ini mungkin {prediction} atau salah secara faktual. 
+    Jika memungkinkan, gunakan informasi eksternal (misalnya, tren media sosial atau sumber terpercaya). 
+    Jika teks mengandung klaim yang meragukan, soroti potensi kesalahan faktual.
+    Teks: "{text[:500]}"  # 500 characters for context
     """
+    
     payload = {
         "model": "deepseek-ai/DeepSeek-R1-0528",
         "messages": [{"role": "user", "content": prompt}],
@@ -196,6 +174,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
         "presence_penalty": 0,
         "frequency_penalty": 0
     }
+
     try:
         response = requests.post(ENDPOINT, headers=headers, json=payload)
         response.raise_for_status()
@@ -209,147 +188,128 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
 
-# Initialize session state
-if 'chat_history' not in st.session_state:
-    st.session_state.chat_history = []
-if 'submitted' not in st.session_state:
-    st.session_state.submitted = False
-
 # UI Layout
-st.title("🛡️ Anti Hoax Indonesia")
-st.markdown("**Chat dengan AI untuk deteksi hoaks berita dalam Bahasa Indonesia.**")
-st.markdown("Masukkan judul berita atau URL artikel, dan saya akan memeriksa apakah itu hoaks atau valid!")
+input_column, reference_column = st.columns([3, 2])
 
-# Reset chat history button
-if st.button("Hapus Riwayat"):
-    st.session_state.chat_history = []
-    st.session_state.submitted = False
-    st.rerun()
+with st.spinner("Memuat Model..."):
+    model, base_model, tokenizer, data = load_model()
 
-# Chat container
-chat_container = st.container()
-with chat_container:
-    for message in st.session_state.chat_history:
-        if message['role'] == 'user':
-            st.markdown(f'<div class="chat-message user-message">{message["content"]}</div>', unsafe_allow_html=True)
-        else:
-            st.markdown(f'<div class="chat-message bot-message">{message["content"]}</div>', unsafe_allow_html=True)
-
-# Input form
-with st.form(key='chat_form', clear_on_submit=True):
-    user_input = st.text_input("Masukkan judul berita atau URL:", placeholder="Contoh: 'Vaksin menyebabkan kemandulan' atau URL artikel")
-    submit = st.form_submit_button("Cek Hoaks")
+# Input options
+with input_column:
+    st.subheader("Masukkan Artikel")
+    input_type = st.radio("Pilih jenis input:", ("URL Artikel", "Teks Langsung"))
+    
+    if input_type == "URL Artikel":
+        user_input = st.text_input("URL Artikel", placeholder="https://example.com/berita", help="Masukkan URL artikel berita dalam Bahasa Indonesia.")
+    else:
+        user_input = st.text_area("Teks Artikel", placeholder="Masukkan teks artikel atau ringkasan...", height=150)
+    
+    process_option = st.selectbox("Proses teks:", ["Seluruh Artikel", "Hanya Judul", "Paragraf Pertama"])
+    submit = st.button("Cek Hoaks")
 
 # Process input
-if submit and user_input and not st.session_state.submitted:
-    st.session_state.submitted = True
-    st.markdown('<div class="spinner"></div>', unsafe_allow_html=True)
-    
-    # Load model
-    with st.spinner("Memuat Model..."):
-        model, base_model, tokenizer, data = load_model()
-    
-    # Add user message
-    st.session_state.chat_history.append({"role": "user", "content": user_input})
-    
-    with st.spinner("Menganalisis Hoaks..."):
+try:
+    if submit and user_input:
         last_time = time.time()
         text = user_input
-        title = user_input
+        title = ""
 
-        # Check if input is a URL
-        if user_input.startswith(('http://', 'https://')):
-            try:
-                scrape_result = scrape(user_input)
-                title = scrape_result.title if hasattr(scrape_result, 'title') else user_input
-                if not title:
-                    title = user_input
-            except Exception as e:
-                st.session_state.chat_history.append({
-                    "role": "bot",
-                    "content": f"Error: Tidak dapat mengambil judul dari URL: {e}"
-                })
-                st.session_state.submitted = False
-                st.rerun()
-                st.stop()
+        if input_type == "URL Artikel":
+            with st.spinner("Membaca Artikel..."):
+                try:
+                    scrape_result = scrape(user_input)
+                    title = scrape_result.title if hasattr(scrape_result, 'title') else ""
+                    text = scrape_result.text if hasattr(scrape_result, 'text') else text
+                    if not title:
+                        st.warning("Judul artikel tidak ditemukan dari URL. Menggunakan teks awal sebagai fallback.")
+                        title = text[:50] if text else "Tanpa Judul"
+                except Exception as e:
+                    st.error(f"Tidak dapat mengambil data artikel dari URL: {e}")
+                    st.stop()
+        
+        if text:
+            text = re.sub(r"\n", " ", text)
 
-        # Process title
-        token = title.split()
-        text_len = len(token)
-        sequences = []
-        for i in range(text_len // 512):
-            sequences.append(" ".join(token[i * 512 : (i + 1) * 512]))
-        sequences.append(" ".join(token[text_len - (text_len % 512) : text_len]))
-        sequences = tokenizer(
-            sequences,
-            max_length=512,
-            truncation=True,
-            padding="max_length",
-            return_tensors="pt",
-        )
+            if process_option == "Hanya Judul" and title:
+                text = title
+            elif process_option == "Paragraf Pertama":
+                text = text.split(". ")[0] + "."
 
-        predictions = model(**sequences)[0].detach().numpy()
-        result = [
-            np.sum([sigmoid(i[0]) for i in predictions]) / len(predictions),
-            np.sum([sigmoid(i[1]) for i in predictions]) / len(predictions),
-        ]
+            with st.spinner("Menganalisis Hoaks..."):
+                token = text.split()
+                text_len = len(token)
 
-        prediction = np.argmax(result, axis=-1)
-        confidence = result[prediction]
-        prediction_label = label[prediction]
+                sequences = []
+                for i in range(text_len // 512):
+                    sequences.append(" ".join(token[i * 512 : (i + 1) * 512]))
+                sequences.append(" ".join(token[text_len - (text_len % 512) : text_len]))
+                sequences = tokenizer(
+                    sequences,
+                    max_length=512,
+                    truncation=True,
+                    padding="max_length",
+                    return_tensors="pt",
+                )
 
-        # Bot response
-        bot_response = f"""
-        Analisis selesai dalam {int(time.time() - last_time)} detik.<br>
-        <div class="result-box {'valid-box' if prediction == 0 else 'fake-box'}">
-        Berita ini {prediction_label}.<br>
-        <b>Tingkat Kepercayaan:</b> {int(confidence*100)}%
-        </div>
-        """
-        if confidence < 0.7:
-            bot_response += """
-            <div class="warning-box">
-            Keyakinan rendah. Disarankan memeriksa fakta lebih lanjut di CekFakta.com atau media resmi.
-            </div>
-            """
+                predictions = model(**sequences)[0].detach().numpy()
+                result = [
+                    np.sum([sigmoid(i[0]) for i in predictions]) / len(predictions),
+                    np.sum([sigmoid(i[1]) for i in predictions]) / len(predictions),
+                ]
 
-        # Generate explanation
-        with st.spinner("Menghasilkan Penjelasan..."):
-            explanation = query_jatevo_hoax_explanation(title, prediction_label, confidence)
-            if explanation:
-                bot_response += f"<h4>Penjelasan</h4>{explanation}"
+                prediction = np.argmax(result, axis=-1)
+                confidence = result[prediction]
+                prediction_label = label[prediction]
 
-        # Reference articles
-        bot_response += "<h4>Artikel Referensi Terkait</h4>"
-        try:
-            if "embeddings" not in data.column_names:
-                bot_response += "Kolom 'embeddings' tidak ditemukan. Tidak dapat menampilkan referensi."
-            else:
-                title_embeddings = base_model.encode([title])[0]
-                similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
-                sorted_indices = np.argsort(similarity_score)[::-1].tolist()
-                if sorted_indices:
-                    for i in sorted_indices[:5]:
-                        bot_response += f"""
-                        <small>{data['url'][i].split('/')[2] if 'url' in data.column_names else 'Sumber Tidak Tersedia'}</small><br>
-                        <a href="{data['url'][i] if 'url' in data.column_names else '#'}" class="reference-link">{data['title'][i]}</a><br>
-                        """
-                else:
-                    bot_response += "Tidak ada referensi yang relevan ditemukan."
-        except Exception as e:
-            bot_response += f"Gagal memuat artikel referensi: {e}<br>Tidak ada referensi tersedia."
+                input_column.markdown(
+                    f"<small>Analisis selesai dalam {int(time.time() - last_time)} detik</small>",
+                    unsafe_allow_html=True,
+                )
+                if prediction:  # fake
+                    input_column.markdown(f'<div class="error-box">Berita ini {prediction_label}.</div>', unsafe_allow_html=True)
+                    input_column.markdown(f'<b>Tingkat Kepercayaan:</b> {int(confidence*100)}%', unsafe_allow_html=True)
+                else:  # valid
+                    input_column.markdown(f'<div class="success-box">Berita ini {prediction_label}.</div>', unsafe_allow_html=True)
+                    input_column.markdown(f'<b>Tingkat Kepercayaan:</b> {int(confidence*100)}%', unsafe_allow_html=True)
+                    if confidence < 0.7:  # Warn if confidence is low
+                        input_column.markdown(
+                            '<div class="warning-box">Keyakinan rendah. Disarankan untuk memeriksa fakta lebih lanjut dari sumber terpercaya seperti CekFakta.com atau media resmi.</div>',
+                            unsafe_allow_html=True
+                        )
 
-        # Add bot response
-        st.session_state.chat_history.append({"role": "bot", "content": bot_response})
+                with st.spinner("Menghasilkan Penjelasan Generatif..."):
+                    explanation = query_jatevo_hoax_explanation(text, prediction_label, confidence)
+                    if explanation:
+                        input_column.subheader("Penjelasan Generatif")
+                        input_column.markdown(explanation)
 
-    st.session_state.submitted = False
-    st.rerun()
-
-# Handle empty input
-if submit and not user_input:
-    st.session_state.chat_history.append({
-        "role": "bot",
-        "content": "Harap masukkan judul berita atau URL artikel."
-    })
-    st.session_state.submitted = False
-    st.rerun()
+                # Display reference articles even if not from URL, as a fallback
+                with reference_column:
+                    st.subheader("Artikel Referensi Terkait")
+                    try:
+                        if "embeddings" not in data.column_names:
+                            st.error("Kolom 'embeddings' tidak ditemukan dalam dataset. Tidak dapat menampilkan referensi.")
+                        else:
+                            # Use title if available, otherwise use text snippet
+                            query_text = title if title else text[:50]
+                            title_embeddings = base_model.encode([query_text])[0]  # Ensure single embedding
+                            similarity_score = cosine_similarity([title_embeddings], data["embeddings"]).flatten()
+                            sorted_indices = np.argsort(similarity_score)[::-1].tolist()
+                            if len(sorted_indices) > 0:
+                                for i in sorted_indices[:5]:
+                                    st.markdown(
+                                        f"""
+                                        <small>{data['url'][i].split('/')[2] if 'url' in data.column_names else 'Sumber Tidak Tersedia'}</small>
+                                        <a href="{data['url'][i] if 'url' in data.column_names else '#'}" class="reference-link">{data['title'][i]}</a>
+                                        """,
+                                        unsafe_allow_html=True,
+                                    )
+                            else:
+                                st.warning("Tidak ada referensi yang relevan ditemukan.")
+                    except Exception as e:
+                        st.error(f"Gagal memuat artikel referensi: {e}")
+                        st.markdown("Tidak ada referensi tersedia saat ini.")
+    elif submit:
+        st.error("Harap masukkan URL atau teks artikel.")
+except Exception as e:
+    st.error(f"Terjadi kesalahan: {e}")
