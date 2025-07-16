@@ -228,7 +228,7 @@ if submit and user_input and not st.session_state.submitted:
                 })
                 st.session_state.submitted = False  # Reset submit state
                 st.experimental_rerun()
-                return
+                st.stop()  # Stop further execution instead of return
 
         # Process title
         token = title.split()
@@ -263,7 +263,7 @@ if submit and user_input and not st.session_state.submitted:
         <b>Tingkat Kepercayaan:</b> {int(confidence*100)}%
         </div>
         """
-        if confidence < 0.7:
+        if confidence < 0.5:
             bot_response += """
             <div class="warning-box">
             Keyakinan rendah. Disarankan memeriksa fakta lebih lanjut di CekFakta.com atau media resmi.
