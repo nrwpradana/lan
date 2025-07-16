@@ -164,7 +164,7 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     """
     
     payload = {
-        "model": "meta-llama/llama-4-scout",
+        "model": "deepseek-ai/DeepSeek-R1-0528",
         "messages": [{"role": "user", "content": prompt}],
         "stop": [],
         "stream": False,
