@@ -30,7 +30,7 @@ h1 {
     color: #007bff;
     text-align: center;
     font-size: 2.8em;
-    margin-bottom: 10pxっていう
+    margin-bottom: 10px;
     font-weight: 700;
 }
 .chat-container {
@@ -175,9 +175,11 @@ def query_jatevo_hoax_explanation(text, prediction, confidence):
     except requests.exceptions.RequestException as e:
         return f"Error Jatevo API: {e}"
 
-# Initialize session state for chat history
+# Initialize session state for chat history and submit state
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
+if 'submitted' not in st.session_state:
+    st.session_state.submitted = False
 
 # UI Layout
 st.title("🛡️ Anti Hoax Indonesia")
@@ -198,8 +200,9 @@ with st.form(key='chat_form', clear_on_submit=True):
     user_input = st.text_input("Masukkan judul berita atau URL:", placeholder="Contoh: 'Vaksin menyebabkan kemandulan' atau URL artikel")
     submit = st.form_submit_button("Cek Hoaks")
 
-# Process input
-if submit and user_input:
+# Process input only if form is submitted and input is not empty
+if submit and user_input and not st.session_state.submitted:
+    st.session_state.submitted = True  # Mark as submitted to prevent re-processing
     with st.spinner("Memuat Model..."):
         model, base_model, tokenizer, data = load_model()
     
@@ -223,7 +226,9 @@ if submit and user_input:
                     "role": "bot",
                     "content": f"Error: Tidak dapat mengambil judul dari URL: {e}"
                 })
+                st.session_state.submitted = False  # Reset submit state
                 st.experimental_rerun()
+                return
 
         # Process title
         token = title.split()
@@ -294,12 +299,14 @@ if submit and user_input:
         # Add bot response to chat history
         st.session_state.chat_history.append({"role": "bot", "content": bot_response})
 
+    st.session_state.submitted = False  # Reset submit state after processing
     st.experimental_rerun()
 
-# Error handling for empty input
+# Handle empty input
 if submit and not user_input:
     st.session_state.chat_history.append({
         "role": "bot",
         "content": "Harap masukkan judul berita atau URL artikel."
     })
+    st.session_state.submitted = False  # Reset submit state
     st.experimental_rerun()
