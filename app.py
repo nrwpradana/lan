@@ -8,7 +8,7 @@ import requests
 import json
 
 try:
-    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer, AutoModel
 except ImportError as e:
     st.error(f"Gagal mengimpor transformers: {e}. Pastikan library transformers terinstall dengan versi terbaru.")
     st.error("Jalankan: pip install --upgrade transformers")
@@ -129,7 +129,7 @@ st.markdown("Masukkan URL artikel atau teks berita untuk memeriksa apakah itu ho
 def load_model():
     try:
         model = AutoModelForSequenceClassification.from_pretrained("Rifky/indobert-hoax-classification", num_labels=2)
-        base_model = SentenceTransformer("firqaaa/indo-sentence-bert-base")
+        base_model = AutoModel.from_pretrained("indobenchmark/indobert-base-p1")
         tokenizer = AutoTokenizer.from_pretrained("Rifky/indobert-hoax-classification", fast=True)
         data = load_dataset("Rifky/indonesian-hoax-news", split="train")
         # Check if embeddings exist, otherwise encode titles
